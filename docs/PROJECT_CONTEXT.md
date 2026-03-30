@@ -81,6 +81,50 @@ Key behaviors:
 - Middleware (auth, error handling, rate limiting)
 - Health checks
 
+## Agent Design (Semantic Kernel)
+
+The system uses 3 conversational agents (Semantic Kernel ChatCompletionAgent) + 1 background job. Each agent has its own Kernel instance with specific plugins.
+
+### Agent 1 — Knowledge Agent (Semantic Brain)
+The most-used agent. Handles everything that enters or exits the knowledge base.
+
+Plugins:
+- **SearchPlugin**: Receives natural language query → generates embedding → searches pgvector → fetches full metadata from PostgreSQL → returns ranked results with context. This plugin is also called by the Consultant Agent when it needs context (shared plugin).
+- **IngestPlugin**: Receives content (URL, text, repo link) → determines type → triggers async ingestion pipeline (extract → chunk → embed → store). Returns tracking ID immediately, doesn't wait for completion.
+
+### Agent 2 — Consultant Agent (Architecture Consultant)
+The most intelligent agent. Reasons about architecture using context from the Knowledge Agent.
+
+Plugins:
+- **ProfilePlugin**: Reads UserProfile before each response (stack, patterns, constraints). After responding, detects patterns for ProfileUpdateSuggestion (e.g., "user mentioned Rust 4 times recently").
+- **SummaryPlugin**: Monitors conversation length. When token count approaches threshold, generates ConversationSummary covering old messages. Manages the rolling context window.
+
+Key behavior: The Consultant does NOT have its own search — it calls the Knowledge Agent's SearchPlugin to retrieve context. This avoids duplicating search logic and ensures a single source of truth.
+
+Consultant's LLM context assembly:
+1. UserProfile (persistent cross-session context)
+2. Latest ConversationSummary (compressed history)
+3. Last N recent messages (detailed recent context)
+4. Retrieved KnowledgeItems via SearchPlugin (RAG context)
+
+### Agent 3 — Guardian Agent (Code Guardian)
+Activated when a repository is submitted for analysis. Not conversational — runs as a task.
+
+Plugins:
+- **RoslynPlugin**: Static analysis of C# code (cyclomatic complexity, cognitive complexity, code smells, anti-patterns)
+- **DependencyPlugin**: Scans NuGet packages for known vulnerabilities, outdated versions, license incompatibilities
+- **GitMetadataPlugin**: Reads repo metadata (stars, issues, commits, contributors, last activity, README quality)
+
+When analysis completes, stores results as KnowledgeItem via the Knowledge Agent's IngestPlugin, making analysis findings searchable in the Semantic Brain.
+
+### Trends Radar — Background Job (NOT an agent)
+The Radar is not a conversational agent — it's an `IHostedService` running on a timer. It doesn't need multi-turn reasoning or conversation management. It scrapes configured sources, evaluates relevance against UserProfile, generates summaries via LLM, and stores relevant trends via IngestPlugin. Implemented as standard .NET background service with Semantic Kernel for LLM calls (summarization, relevance scoring) but without the Agent Framework overhead.
+
+### Inter-Agent Communication
+Agents communicate through shared plugins, not direct agent-to-agent messaging. The SearchPlugin and IngestPlugin act as the shared interface — any agent can search or store knowledge through them. This keeps the architecture simple and avoids complex orchestration patterns.
+
+Auto function calling (`FunctionChoiceBehavior.Auto()`) lets the LLM decide when to invoke plugins based on their descriptions. The descriptions must be clear and specific for this to work reliably.
+
 ## Key Technical Decisions
 
 | Decision | Choice | Rationale |
@@ -92,9 +136,22 @@ Key behaviors:
 | Code analysis | Roslyn (C#) + dependency scanners | Static analysis without code execution — no sandbox needed |
 | Architecture pattern | Clean Architecture | Decoupled layers allow infrastructure changes without business logic rewrites |
 | Multi-tenancy | `UserId` + `TenantId` on all entities | Baked in from day one; initially TenantId == UserId |
+| Authentication | ASP.NET Identity + JWT | Identity handles user management, hashing, roles; JWT for API auth |
+| Authorization | Role-based (Admin, User) | Admin: full access + content review. User: personal ingestion + queries + publication requests |
+| Content scope | Personal + Shared with approval | Users create personal content; publication to shared space requires Admin approval via ContentPublishRequest |
 | Conversation management | Rolling summary + UserProfile | ConversationSummary every N messages to control token costs; UserProfile for cross-session memory |
 | Profile updates | Suggestion-based (not automatic) | AI suggests profile changes → user confirms → prevents "identity pollution" from exploratory chats |
 | Repo trust levels | Internal vs External | External gets full security scan; Internal focuses on quality/debt |
+
+## Content Scope Model
+
+Knowledge exists in two scopes:
+- **Personal**: `TenantId = userId`. Only visible to the owning user. Created by default when any user ingests content.
+- **Shared**: `TenantId = team/org tenantId`. Visible to all users in the tenant. Content reaches this scope only through Admin approval.
+
+**Why this matters**: Prevents low-quality content from polluting the shared knowledge base. A junior developer can explore and save whatever they want in their personal space, but the team's shared brain stays curated. The Admin acts as quality gatekeeper.
+
+**Search behavior**: When a user queries, SearchPlugin returns results from their personal scope + the shared scope. Admin can query all scopes.
 
 ## Data Flow Patterns
 

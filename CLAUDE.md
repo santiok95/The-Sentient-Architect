@@ -35,6 +35,23 @@ dotnet ef migrations add <Name> --project src/SentientArchitect.Infrastructure -
 - Interfaces in Domain, implementations in Infrastructure
 - Every entity includes `UserId` and `TenantId` for multi-tenancy
 
+## Authentication & Authorization
+- ASP.NET Identity with JWT bearer tokens
+- User entity inherits `IdentityUser<Guid>` — Identity tables renamed (no "AspNet" prefix)
+- Two roles: `Admin` (full access, content review) and `User` (personal ingestion, queries, publication requests)
+- Content scope: Personal (`TenantId = userId`) + Shared (`TenantId = org tenantId`)
+- User content starts personal; reaches shared only through Admin-approved `ContentPublishRequest`
+- SearchPlugin returns personal + shared results for User role; all scopes for Admin
+
+## Agents (Semantic Kernel)
+3 conversational agents + 1 background job:
+- **Knowledge Agent**: SearchPlugin + IngestPlugin. Handles all knowledge storage and retrieval.
+- **Consultant Agent**: ProfilePlugin + SummaryPlugin + shared SearchPlugin. Multi-turn architecture consultations.
+- **Guardian Agent**: RoslynPlugin + DependencyPlugin + GitMetadataPlugin. Repo static analysis.
+- **Trends Radar**: IHostedService (NOT an agent). Background job on timer.
+
+Agents share SearchPlugin and IngestPlugin — no duplicated search/storage logic.
+
 ## IMPORTANT Rules
 - Domain layer must have ZERO NuGet dependencies
 - NEVER execute code from analyzed repositories — static analysis only

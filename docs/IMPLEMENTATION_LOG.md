@@ -19,7 +19,8 @@
 | ConversationSummary design | ✅ | Rolling summary for token cost management |
 | UserProfile update mechanism | ✅ | Suggestion-based with user confirmation |
 | Repo trust levels | ✅ | Internal (quality focus) vs External (full security scan) |
-| Semantic Kernel agent design | 📋 | Next: define agents, plugins, orchestration |
+| Semantic Kernel agent design | ✅ | 3 agents (Knowledge, Consultant, Guardian) + 1 background job (Radar) |
+| Semantic Kernel rule file | ✅ | .claude/rules/semantic-kernel.md created |
 | API contracts | 📋 | Endpoints, request/response models |
 | Security & auth design | 📋 | RBAC, JWT, endpoint protection |
 | Stack with versions | 📋 | Exact NuGet packages and versions |

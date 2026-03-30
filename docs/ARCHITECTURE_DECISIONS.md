@@ -22,15 +22,20 @@ Domain ← Application ← Infrastructure ← Presentation. No layer references 
 
 ### Shared / Cross-cutting
 
-#### User
+#### User (inherits IdentityUser\<Guid\>)
+Uses ASP.NET Identity for authentication. Custom fields added on top.
 | Property | Type | Notes |
 |----------|------|-------|
-| Id | Guid | PK |
-| Email | string | Unique, required |
-| DisplayName | string | Required |
-| PasswordHash | string | Auth — may be replaced by external IdP |
-| TenantId | Guid | Multi-tenancy key; initially == UserId |
+| *(inherited from IdentityUser)* | | Id (Guid), Email, UserName, PasswordHash, EmailConfirmed, LockoutEnd, etc. |
+| DisplayName | string | Required, custom field |
+| TenantId | Guid | Multi-tenancy key; initially == UserId for solo users |
 | CreatedAt | DateTime | UTC |
+
+**Identity table renaming**: AspNetUsers → Users, AspNetRoles → Roles, AspNetUserRoles → UserRoles, AspNetRoleClaims → RoleClaims, AspNetUserClaims → UserClaims, AspNetUserLogins → UserLogins, AspNetUserTokens → UserTokens.
+
+**Roles**:
+- `Admin` — full access: shared ingestion, content review, user management, all queries
+- `User` — personal ingestion, queries (personal + shared), request publication to shared space
 
 #### UserProfile
 Persistent, accumulative context. Read by the Architecture Consultant before every session.
@@ -59,6 +64,29 @@ Persistent, accumulative context. Read by the Architecture Consultant before eve
 | Status | enum | Pending / Accepted / Rejected |
 | DetectedInConversationId | Guid? | FK → Conversation (nullable) |
 | CreatedAt | DateTime | UTC |
+
+#### ContentPublishRequest
+Controls quality of shared knowledge base. Users request publication → Admin reviews.
+| Property | Type | Notes |
+|----------|------|-------|
+| Id | Guid | PK |
+| KnowledgeItemId | Guid | FK → KnowledgeItem |
+| RequestedByUserId | Guid | FK → User (who requested) |
+| ReviewedByUserId | Guid? | FK → User (which Admin reviewed, null if pending) |
+| Status | enum | Pending / Approved / Rejected |
+| RequestReason | string? | Why the user thinks this is valuable for the team |
+| RejectionReason | string? | Admin feedback on why it was rejected |
+| CreatedAt | DateTime | UTC |
+| ReviewedAt | DateTime? | UTC, null if pending |
+
+**Publication flow**:
+1. User ingests content → stored as personal (`TenantId = userId`)
+2. User requests "publish to team" → creates ContentPublishRequest (Pending)
+3. Admin reviews → Approved: KnowledgeItem.TenantId changes to shared tenantId, re-indexed in shared space. Rejected: stays personal, user gets feedback.
+
+**Search scope logic**:
+- User queries: returns personal items (TenantId == userId) + shared items (TenantId == team tenantId)
+- Admin queries: returns all items across all scopes
 
 ### Pillar 1 — Semantic Brain
 
@@ -243,9 +271,12 @@ Point-in-time capture for tracking evolution.
 - User 1:N KnowledgeItem
 - User 1:N Conversation
 - User 1:N ProfileUpdateSuggestion
+- User 1:N ContentPublishRequest (as requester)
+- User 1:N ContentPublishRequest (as reviewer)
 - KnowledgeItem 1:N KnowledgeEmbedding
 - KnowledgeItem M:N Tag (via KnowledgeItemTag)
 - KnowledgeItem 1:0..1 RepositoryInfo (TPT — extends if type is RepositoryReference)
+- KnowledgeItem 1:N ContentPublishRequest
 - RepositoryInfo 1:N AnalysisReport
 - AnalysisReport 1:N AnalysisFinding
 - Conversation 1:N ConversationMessage
@@ -253,6 +284,97 @@ Point-in-time capture for tracking evolution.
 - Conversation 1:N ArchitectureRecommendation
 - TechnologyTrend 1:N TrendSnapshot
 - TechnologyTrend 0..1:1 KnowledgeItem (optional storage in Brain)
+
+## Semantic Kernel Agent Architecture
+
+### Agents (ChatCompletionAgent instances)
+
+| Agent | Kernel Plugins | Responsibility |
+|-------|---------------|----------------|
+| Knowledge Agent | SearchPlugin, IngestPlugin | Ingestion pipeline, semantic search, RAG retrieval |
+| Consultant Agent | ProfilePlugin, SummaryPlugin + shared SearchPlugin | Multi-turn architecture consultations with context |
+| Guardian Agent | RoslynPlugin, DependencyPlugin, GitMetadataPlugin | Repository static analysis and scoring |
+
+### Shared Plugin Pattern
+SearchPlugin and IngestPlugin are registered as shared services. The Consultant Agent and Guardian Agent call them through their Kernel's plugin registry. This avoids duplicating search/storage logic and ensures all agents interact with the same knowledge base.
+
+### Plugin Specifications
+
+#### SearchPlugin (Knowledge Agent — shared)
+```
+[KernelFunction] SearchByMeaning(string query, int maxResults = 5)
+→ Generates embedding → pgvector similarity search → fetches metadata → returns ranked KnowledgeItem summaries with IDs
+
+[KernelFunction] SearchByTag(string[] tags, int maxResults = 10)
+→ Filters KnowledgeItems by tags → returns matches
+```
+
+#### IngestPlugin (Knowledge Agent — shared)
+```
+[KernelFunction] IngestContent(string title, string content, string? sourceUrl, string type)
+→ Creates KnowledgeItem (Pending) → queues background processing → returns tracking ID
+
+[KernelFunction] IngestRepository(string gitUrl, string trustLevel)
+→ Creates KnowledgeItem + RepositoryInfo → queues clone + analysis → returns tracking ID
+```
+
+#### ProfilePlugin (Consultant Agent)
+```
+[KernelFunction] GetUserProfile()
+→ Returns current UserProfile (stack, patterns, constraints, notes)
+
+[KernelFunction] SuggestProfileUpdate(string field, string value, string reason)
+→ Creates ProfileUpdateSuggestion (Pending) → user confirms later
+```
+
+#### SummaryPlugin (Consultant Agent)
+```
+[KernelFunction] GetConversationContext(Guid conversationId)
+→ Returns latest ConversationSummary + recent messages (within token budget)
+
+[KernelFunction] CompactConversation(Guid conversationId)
+→ Generates summary of old messages → stores ConversationSummary → trims context
+```
+
+#### RoslynPlugin (Guardian Agent)
+```
+[KernelFunction] AnalyzeCodeQuality(string repoPath)
+→ Runs Roslyn analyzers → returns findings (complexity, smells, patterns)
+```
+
+#### DependencyPlugin (Guardian Agent)
+```
+[KernelFunction] ScanDependencies(string repoPath, string trustLevel)
+→ Reads package files → checks vulnerability DBs → returns findings
+```
+
+#### GitMetadataPlugin (Guardian Agent)
+```
+[KernelFunction] ExtractMetadata(string repoPath, string? gitUrl)
+→ Reads git history + GitHub API → returns metadata (stars, issues, activity)
+```
+
+### Trends Radar (IHostedService, not an agent)
+Runs as `TrendScannerBackgroundService : BackgroundService` on configurable timer (e.g., daily). Uses Semantic Kernel for LLM calls (summarization, relevance scoring) but not the Agent Framework. Stores results via IngestPlugin.
+
+### Agent Instantiation Pattern (Infrastructure Layer)
+```csharp
+// Each agent gets its own Kernel with specific plugins
+var knowledgeKernel = Kernel.CreateBuilder()
+    .AddOpenAIChatCompletion(modelId, apiKey)
+    .Build();
+knowledgeKernel.Plugins.Add(KernelPluginFactory.CreateFromObject(searchPlugin));
+knowledgeKernel.Plugins.Add(KernelPluginFactory.CreateFromObject(ingestPlugin));
+
+var knowledgeAgent = new ChatCompletionAgent
+{
+    Name = "KnowledgeAgent",
+    Instructions = "You are a knowledge management assistant...",
+    Kernel = knowledgeKernel,
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() })
+};
+```
 
 ## EF Core Strategy
 
