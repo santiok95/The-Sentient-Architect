@@ -33,8 +33,13 @@
 | Domain enums | ✅ | KnowledgeItemType, ProcessingStatus, TagCategory |
 | Domain value objects | ✅ | VectorSearchResult record |
 | Domain interfaces | ✅ | IKnowledgeRepository, IVectorStore, IEmbeddingService, ITagRepository |
-| EF Core DbContext | 📋 | |
-| pgvector setup | 📋 | |
+| Identity (User entity) | ✅ | IdentityUser\<Guid\> in Infrastructure/Identity. DisplayName, TenantId, CreatedAt. Table renamed to "Users" |
+| EF Core DbContext | ✅ | IdentityDbContext\<User\>, pgvector extension, ApplyConfigurationsFromAssembly |
+| Identity table renaming | ✅ | All 7 AspNet* tables renamed (Users, Roles, UserRoles, RoleClaims, UserClaims, UserLogins, UserTokens) |
+| Fluent API configs | ✅ | KnowledgeItem, KnowledgeEmbedding, Tag, KnowledgeItemTag. Enums as string, FK via ADR-002 |
+| pgvector setup | ✅ | vector(1536) hardcoded (ADR-001), HNSW index with cosine ops |
+| ADR-001 | ✅ | Hardcoded vector(1536) for HNSW performance |
+| ADR-002 | ✅ | FK via Fluent API without navigation property (cross-layer) |
 | Ingestion pipeline | 📋 | Background job: extract → chunk → embed → store |
 | RAG query flow | 📋 | Embed question → search → fetch metadata → LLM |
 | Basic API endpoints | 📋 | |

@@ -411,3 +411,38 @@ var knowledgeAgent = new ChatCompletionAgent
 - **Indexes**: HNSW index on KnowledgeEmbedding.Embedding for fast similarity search
 - **Guid PKs**: Generated client-side with `Guid.NewGuid()` or sequential GUIDs for index performance
 - **UTC timestamps**: All DateTime properties stored as UTC; conversion in EF Core value converters
+
+## Architecture Decision Records (ADRs)
+
+### ADR-001: Hardcoded vector(1536) for Embedding Column
+
+**Status**: Accepted  
+**Date**: 2026-03-30  
+**Context**: The `KnowledgeEmbedding.Embedding` column needs a pgvector column type. We use `text-embedding-3-small` (1536 dimensions) as the default embedding model.
+
+**Decision**: Hardcode `vector(1536)` in the EF Core Fluent API configuration instead of using an untyped `vector` column.
+
+**Rationale**:
+- HNSW indexes perform better with a known, fixed dimensionality — the index builder can optimize memory layout and distance calculations.
+- Using an untyped `vector` would allow mixed-dimension vectors in the same table, making similarity search meaningless (comparing 768-dim with 1536-dim vectors is invalid).
+- The project's own `vector-db.md` rule states: *"all embeddings MUST use the same model — mixing models makes similarity search meaningless"*. A typed column enforces this at the database level.
+
+**Trade-off**: If we change embedding models (e.g., to `text-embedding-3-large` at 3072 dimensions), a migration is required to alter the column type AND all existing embeddings must be re-generated. This is acceptable because changing embedding models already requires re-embedding everything (it's inherently a breaking operation).
+
+---
+
+### ADR-002: FK via Fluent API Without Navigation Property (Cross-Layer References)
+
+**Status**: Accepted  
+**Date**: 2026-03-30  
+**Context**: `KnowledgeItem` (Domain layer) has a `Guid UserId` property referencing `User` (Infrastructure layer, inherits `IdentityUser<Guid>`). Clean Architecture forbids Domain from referencing Infrastructure, so `KnowledgeItem` cannot have a `User` navigation property.
+
+**Decision**: Configure the foreign key constraint via Fluent API in Infrastructure (`HasOne<User>().WithMany().HasForeignKey(x => x.UserId)`) without any navigation property on the Domain entity.
+
+**Rationale**:
+- **Domain purity preserved**: `KnowledgeItem` only knows about `Guid UserId` — no IdentityUser dependency leaks into Domain.
+- **Referential integrity enforced**: The FK constraint exists in the database (created by EF Core migrations), preventing orphaned records.
+- **EF Core supports this pattern**: `HasOne<T>()` without a navigation property is a first-class EF Core feature for exactly this use case.
+- **Querying still works**: We can join via `UserId` in LINQ queries from Infrastructure/Application layers.
+
+**Trade-off**: We lose the convenience of `Include(x => x.User)` eager loading on `KnowledgeItem`. This is acceptable because User data is typically loaded separately (e.g., from the auth context or a dedicated query), not eagerly with every KnowledgeItem fetch.
