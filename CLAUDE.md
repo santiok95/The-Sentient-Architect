@@ -62,4 +62,5 @@ Agents share SearchPlugin and IngestPlugin — no duplicated search/storage logi
 ## Detailed Context
 For full entity model and relationships: read `docs/ARCHITECTURE_DECISIONS.md`
 For project vision, data flows, and risks: read `docs/PROJECT_CONTEXT.md`
+For API endpoints, request/response models, and SignalR hubs: read `docs/API_CONTRACTS.md`
 For implementation progress: read `docs/IMPLEMENTATION_LOG.md`

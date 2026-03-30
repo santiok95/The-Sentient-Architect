@@ -21,9 +21,9 @@
 | Repo trust levels | ✅ | Internal (quality focus) vs External (full security scan) |
 | Semantic Kernel agent design | ✅ | 3 agents (Knowledge, Consultant, Guardian) + 1 background job (Radar) |
 | Semantic Kernel rule file | ✅ | .claude/rules/semantic-kernel.md created |
-| API contracts | 📋 | Endpoints, request/response models |
+| API contracts | ✅ | 7 endpoint groups + 3 SignalR hubs. Minimal APIs with /api/v1/ versioning |
 | Security & auth design | ✅ | ASP.NET Identity + JWT, Admin/User roles, content scope (personal + shared with approval) |
-| Stack with versions | 📋 | Exact NuGet packages and versions |
+| Stack with versions | ✅ | Full NuGet stack documented in PROJECT_CONTEXT.md |
 
 ## Phase 1 — Semantic Brain
 | Item | Status | Notes |

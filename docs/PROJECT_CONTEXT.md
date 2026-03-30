@@ -153,6 +153,64 @@ Knowledge exists in two scopes:
 
 **Search behavior**: When a user queries, SearchPlugin returns results from their personal scope + the shared scope. Admin can query all scopes.
 
+## NuGet Stack (Concrete Versions)
+
+Versions verified as of March 2026. Use `latest stable` if newer patch versions exist at implementation time.
+
+### Core Runtime
+| Package | Version | Project | Purpose |
+|---------|---------|---------|---------|
+| `Microsoft.NET.Sdk` | net9.0 | All | .NET 9 target framework |
+
+### Domain Layer
+No NuGet packages. Zero external dependencies.
+
+### Application Layer
+| Package | Version | Project | Purpose |
+|---------|---------|---------|---------|
+| `MediatR` | 12.x | Application | Optional: CQRS command/query dispatching. Alternative: direct Use Case injection |
+| `FluentValidation` | 11.x | Application | Request validation in Use Cases |
+| `AutoMapper` | 13.x | Application | Entity ↔ DTO mapping. Alternative: manual mappers |
+
+### Infrastructure Layer
+| Package | Version | Project | Purpose |
+|---------|---------|---------|---------|
+| `Microsoft.EntityFrameworkCore` | 9.x | Infrastructure | ORM |
+| `Npgsql.EntityFrameworkCore.PostgreSQL` | 9.x | Infrastructure | PostgreSQL provider for EF Core |
+| `Pgvector` | 0.3.2 | Infrastructure | pgvector .NET types (Vector, HalfVector) |
+| `Pgvector.EntityFrameworkCore` | 0.3.0 | Infrastructure | EF Core integration for pgvector |
+| `Microsoft.SemanticKernel` | 1.74.x | Infrastructure | AI orchestration core (includes OpenAI connector) |
+| `Microsoft.SemanticKernel.Agents.Core` | 1.74.x | Infrastructure | ChatCompletionAgent and agent framework |
+| `Microsoft.AspNetCore.Identity.EntityFrameworkCore` | 9.x | Infrastructure | ASP.NET Identity with EF Core |
+| `Microsoft.AspNetCore.Authentication.JwtBearer` | 9.x | Infrastructure | JWT authentication |
+| `Microsoft.CodeAnalysis.CSharp` | 4.x | Infrastructure | Roslyn — C# static analysis |
+| `Octokit` | 13.x | Infrastructure | GitHub API client for repo metadata |
+
+### Presentation (API) Layer
+| Package | Version | Project | Purpose |
+|---------|---------|---------|---------|
+| `Microsoft.AspNetCore.SignalR` | (included in SDK) | API | Real-time hubs (Conversation, Analysis, Ingestion) |
+| `Swashbuckle.AspNetCore` | 7.x | API | Swagger/OpenAPI documentation |
+| `Asp.Versioning.Http` | 8.x | API | URL-based API versioning (/api/v1/) |
+
+### Testing
+| Package | Version | Project | Purpose |
+|---------|---------|---------|---------|
+| `xunit` | 2.x | Tests | Test framework |
+| `FluentAssertions` | 7.x | Tests | Readable assertions |
+| `NSubstitute` | 5.x | Tests | Mocking framework |
+| `Testcontainers.PostgreSql` | 4.x | IntegrationTests | Spin up real PostgreSQL for integration tests |
+| `Microsoft.AspNetCore.Mvc.Testing` | 9.x | IntegrationTests | API integration test host |
+
+### Embedding Model
+| Model | Provider | Dimensions | Purpose |
+|-------|----------|------------|---------|
+| `text-embedding-3-small` | OpenAI | 1536 | Default embedding model for all content vectorization |
+| `gpt-4o` | OpenAI | N/A | Consultant Agent, Guardian Agent reasoning |
+| `gpt-4o-mini` | OpenAI | N/A | Summarization, tagging, trend evaluation, degraded mode |
+
+**Note**: Model selection is configurable in `appsettings.json`. The embedding model MUST remain consistent across all content — changing it requires re-embedding everything. LLM models for reasoning can be swapped freely.
+
 ## Data Flow Patterns
 
 ### Ingestion Flow (async)
