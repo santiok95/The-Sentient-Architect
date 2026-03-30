@@ -28,7 +28,11 @@
 ## Phase 1 — Semantic Brain
 | Item | Status | Notes |
 |------|--------|-------|
-| Domain entities | 📋 | KnowledgeItem, KnowledgeEmbedding, Tag |
+| Solution scaffold | ✅ | 4 projects: Domain, Application, Infrastructure, API. Correct dependency references. .slnx format |
+| Domain entities | ✅ | KnowledgeItem, KnowledgeEmbedding, Tag, KnowledgeItemTag. Factory methods, guard clauses, private setters |
+| Domain enums | ✅ | KnowledgeItemType, ProcessingStatus, TagCategory |
+| Domain value objects | ✅ | VectorSearchResult record |
+| Domain interfaces | ✅ | IKnowledgeRepository, IVectorStore, IEmbeddingService, ITagRepository |
 | EF Core DbContext | 📋 | |
 | pgvector setup | 📋 | |
 | Ingestion pipeline | 📋 | Background job: extract → chunk → embed → store |

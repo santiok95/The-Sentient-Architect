@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SentientArchitect.API/SentientArchitect.API.csproj" />
+  <Project Path="SentientArchitect.Application/SentientArchitect.Application.csproj" />
+  <Project Path="SentientArchitect.Domain/SentientArchitect.Domain.csproj" />
+  <Project Path="SentientArchitect.Infrastructure/SentientArchitect.Infrastructure.csproj" />
+</Solution>

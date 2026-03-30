@@ -21,7 +21,7 @@ Clean Architecture with 4 layers. Dependency flows inward only: Domain ← Appli
 
 ## Commands
 ```
-dotnet build src/SentientArchitect.sln
+dotnet build src/SentientArchitect.slnx
 dotnet test tests/
 dotnet ef migrations add <Name> --project src/SentientArchitect.Infrastructure --startup-project src/SentientArchitect.API
 ```
