@@ -1,0 +1,64 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+
+# NuGet
+*.nupkg
+**/packages/*
+*.nuget.props
+*.nuget.targets
+project.lock.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# User-specific files
+*.rsuser
+*.user
+*.dbmdl
+*.jfm
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Project specific
+temp-repos/          # Temp directory for cloned repos during analysis
+*.env                # Environment variables (API keys, connection strings)
+appsettings.*.json   # Local settings overrides
+!appsettings.json    # Keep the template
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+
+# Claude Code
+.claude/settings.local.json
