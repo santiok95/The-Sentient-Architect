@@ -88,6 +88,21 @@ Controls quality of shared knowledge base. Users request publication → Admin r
 - User queries: returns personal items (TenantId == userId) + shared items (TenantId == team tenantId)
 - Admin queries: returns all items across all scopes
 
+#### TokenUsageTracker
+Prevents runaway LLM costs. Tracks daily token consumption per user.
+| Property | Type | Notes |
+|----------|------|-------|
+| Id | Guid | PK |
+| UserId | Guid | FK → User |
+| TenantId | Guid | For tenant-level quota enforcement |
+| Date | DateOnly | The day being tracked |
+| TokensConsumed | long | Total tokens used this day (input + output) |
+| DailyQuota | long | Configurable limit; default from tenant settings |
+| QuotaAction | enum | Warn / DegradeModel / Block |
+| LastUpdatedAt | DateTime | UTC |
+
+**Behavior**: Incremented after every LLM call. When TokensConsumed approaches DailyQuota (80%), system warns the user. At 100%, based on QuotaAction: DegradeModel switches from GPT-4o to GPT-4o-mini; Block stops LLM calls until next day. Admin can override per-user.
+
 ### Pillar 1 — Semantic Brain
 
 #### KnowledgeItem
@@ -106,6 +121,11 @@ Central entity. All knowledge flows through this.
 | ProcessingStatus | enum | Pending / Processing / Completed / Failed |
 | CreatedAt | DateTime | UTC |
 | UpdatedAt | DateTime | UTC |
+
+**Storage policy for OriginalContent by Type**:
+- Article / Note / Documentation: full raw text stored (typically small, <50KB)
+- RepositoryReference: NOT full source code. Stores: processed README + AI-generated project summary + code fragments that triggered analysis findings. Full code accessed via GitUrl on demand.
+- TrendReport: AI-generated summary with source citations
 
 #### KnowledgeEmbedding
 One KnowledgeItem → many embeddings (one per chunk).
@@ -356,6 +376,12 @@ SearchPlugin and IngestPlugin are registered as shared services. The Consultant 
 
 ### Trends Radar (IHostedService, not an agent)
 Runs as `TrendScannerBackgroundService : BackgroundService` on configurable timer (e.g., daily). Uses Semantic Kernel for LLM calls (summarization, relevance scoring) but not the Agent Framework. Stores results via IngestPlugin.
+
+### Operational Controls
+
+**Guardian concurrency**: `CodeAnalysisBackgroundService` uses `SemaphoreSlim(maxConcurrent: 1)` (configurable). Each analysis has a `CancellationToken` with timeout (default: 10 minutes). Queue system for multiple pending analyses — FIFO processing.
+
+**Token quota enforcement**: Every LLM call (agent response, embedding generation, summarization) increments `TokenUsageTracker`. Middleware checks quota before processing agent requests. At 80%: warning notification. At 100%: action based on `QuotaAction` setting (Warn/DegradeModel/Block).
 
 ### Agent Instantiation Pattern (Infrastructure Layer)
 ```csharp

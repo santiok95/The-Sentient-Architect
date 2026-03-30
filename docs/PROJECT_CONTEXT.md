@@ -185,12 +185,16 @@ Knowledge exists in two scopes:
 
 | Risk | Mitigation |
 |------|------------|
-| LLM API costs escalate | ConversationSummary to reduce token usage; token tracking per message; configurable model selection |
+| LLM API costs escalate | ConversationSummary to reduce token usage; token tracking per message; DailyTokenQuota per User/Tenant with alerts and model degradation; configurable model selection |
 | pgvector performance at scale | Abstract behind IVectorStore; monitor query times; migrate to dedicated Vector DB if needed |
 | Malicious code in external repos | Static analysis ONLY — never execute repo code; sandboxed temp directory for cloning; delete after analysis |
 | Embedding model changes | KnowledgeEmbedding separated from KnowledgeItem; re-embedding is a bulk operation that doesn't touch source data |
 | Stale knowledge base | Trends Radar provides freshness; user can trigger re-analysis of repos; content freshness indicators |
 | Scope creep | Implement pillar by pillar: Semantic Brain → Consultant → Guardian → Radar |
+| Roslyn memory consumption | SemaphoreSlim limiting concurrent analyses (default: 1); CancellationToken with timeout per analysis; queue system for multiple repos |
+| Database bloat from repo content | Repos store README + AI summary + relevant code fragments only, NOT full source code. Full code accessed via GitUrl on demand |
+| Low-quality shared knowledge | ContentPublishRequest with Admin approval. User content starts personal; shared space is curated |
+| Domain layer purity vs Identity | User entity inherits IdentityUser in Infrastructure; Domain uses float[] for embeddings (not pgvector Vector type); mapping at Infrastructure boundary |
 
 ## Implementation Order
 

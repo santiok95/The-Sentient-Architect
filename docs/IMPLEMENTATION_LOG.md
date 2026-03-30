@@ -22,7 +22,7 @@
 | Semantic Kernel agent design | ✅ | 3 agents (Knowledge, Consultant, Guardian) + 1 background job (Radar) |
 | Semantic Kernel rule file | ✅ | .claude/rules/semantic-kernel.md created |
 | API contracts | 📋 | Endpoints, request/response models |
-| Security & auth design | 📋 | RBAC, JWT, endpoint protection |
+| Security & auth design | ✅ | ASP.NET Identity + JWT, Admin/User roles, content scope (personal + shared with approval) |
 | Stack with versions | 📋 | Exact NuGet packages and versions |
 
 ## Phase 1 — Semantic Brain
