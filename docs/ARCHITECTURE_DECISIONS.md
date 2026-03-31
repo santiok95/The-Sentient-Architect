@@ -8,8 +8,8 @@ SentientArchitect/
 │   ├── SentientArchitect.Domain/          # Entities, ValueObjects, IEntity/BaseEntity, Enums
 │   ├── SentientArchitect.Application/     # Interfaces, Result pattern, Use Cases (Vertical Slice)
 │   ├── SentientArchitect.Data/            # ApplicationContext, Entity Configurations, ApplicationUser
-│   ├── SentientArchitect.Data.Postgres/   # pgvector configs, HNSW, Migrations, DI
-│   ├── SentientArchitect.Infrastructure/  # Identity services, TokenService, Seeder, DI
+│   ├── SentientArchitect.Data.Postgres/   # pgvector configs, HNSW, Migrations, DI (strictly DB driver config)
+│   ├── SentientArchitect.Infrastructure/  # Identity services (AddIdentityCore), TokenService, Seeder, DI
 │   └── SentientArchitect.API/             # Minimal API endpoints, SignalR, Middleware
 ├── tests/
 │   ├── SentientArchitect.UnitTests/

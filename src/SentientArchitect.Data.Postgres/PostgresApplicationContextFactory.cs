@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 
 namespace SentientArchitect.Data.Postgres;
 
@@ -28,9 +29,13 @@ public class PostgresApplicationContextFactory
                 $"Connection string '{ConnectionName}' was not found in API appsettings.");
         }
 
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.UseVector();
+        var dataSource = dataSourceBuilder.Build();
+
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationContext>();
 
-        optionsBuilder.UseNpgsql(connectionString, npgsql =>
+        optionsBuilder.UseNpgsql(dataSource, npgsql =>
         {
             npgsql.MigrationsAssembly(typeof(PostgresApplicationContextFactory).Assembly.FullName);
             npgsql.UseVector();
