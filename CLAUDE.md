@@ -12,32 +12,39 @@ AI-powered developer knowledge management system with 4 pillars: Semantic Brain 
 - SignalR (real-time streaming)
 
 ## Architecture
-Clean Architecture with 4 layers. Dependency flows inward only: Domain ← Application ← Infrastructure ← Presentation.
+Clean Architecture with 6 projects. Dependency flows inward only.
 
-- `src/SentientArchitect.Domain/` — Entities, ValueObjects, Interfaces, Enums. ZERO external dependencies.
-- `src/SentientArchitect.Application/` — Use Cases, DTOs, Mappers, Agent orchestration logic.
-- `src/SentientArchitect.Infrastructure/` — EF Core, pgvector, Semantic Kernel config, Roslyn, external APIs, background jobs.
-- `src/SentientArchitect.API/` — REST controllers, SignalR hubs, middleware.
+- `src/SentientArchitect.Domain/` — Entities, Enums, IEntity. ZERO NuGet, ZERO exceptions.
+- `src/SentientArchitect.Application/` — Interfaces, Result pattern, Use Cases (Vertical Slice when ready).
+- `src/SentientArchitect.Data/` — ApplicationContext, Entity Configurations, ApplicationUser.
+- `src/SentientArchitect.Data.Postgres/` — PostgreSQL-specific (pgvector, HNSW), Migrations, DesignTimeFactory, DI.
+- `src/SentientArchitect.Infrastructure/` — Identity services (TokenService, UserAccessor, Seeder), DI.
+- `src/SentientArchitect.API/` — Minimal API endpoints, SignalR hubs, middleware, ResultExtensions.
 
 ## Commands
 ```
 dotnet build src/SentientArchitect.slnx
 dotnet test tests/
-dotnet ef migrations add <Name> --project src/SentientArchitect.Infrastructure --startup-project src/SentientArchitect.API
+dotnet ef migrations add <Name> -p src/SentientArchitect.Data.Postgres -s src/SentientArchitect.API
 ```
 
 ## Coding Conventions
-- Use Fluent API for all EF Core configurations (never data annotations on entities)
-- Domain entities have private setters; modification through methods
+- ALL entities inherit `BaseEntity` (Id + CreatedAt) except join tables with composite keys
+- Entities: private setters, private parameterless constructor for EF Core, behavior methods for state changes
+- Result pattern for all Application services (no exceptions for business logic)
+- Fluent API for all EF Core configurations (never data annotations)
+- Enums stored as string via `.HasConversion<string>().HasMaxLength(50)` in EF configs
+- Interfaces in Application, implementations in Infrastructure/Data
+- `List<string>` with JSONB for string collections (never `string[]`)
 - All DateTime properties stored as UTC
 - Guid PKs generated client-side
 - Async/await throughout; suffix async methods with `Async`
-- Interfaces in Domain, implementations in Infrastructure
 - Every entity includes `UserId` and `TenantId` for multi-tenancy
 
 ## Authentication & Authorization
 - ASP.NET Identity with JWT bearer tokens
-- User entity inherits `IdentityUser<Guid>` — Identity tables renamed (no "AspNet" prefix)
+- `User` POCO in Domain (no IdentityUser dependency). `ApplicationUser : IdentityUser<Guid>` in Data.
+- Identity tables renamed (no "AspNet" prefix)
 - Two roles: `Admin` (full access, content review) and `User` (personal ingestion, queries, publication requests)
 - Content scope: Personal (`TenantId = userId`) + Shared (`TenantId = org tenantId`)
 - User content starts personal; reaches shared only through Admin-approved `ContentPublishRequest`
@@ -53,11 +60,13 @@ dotnet ef migrations add <Name> --project src/SentientArchitect.Infrastructure -
 Agents share SearchPlugin and IngestPlugin — no duplicated search/storage logic.
 
 ## IMPORTANT Rules
-- Domain layer must have ZERO NuGet dependencies
+- Domain layer: ZERO NuGet dependencies, ZERO exceptions (no `throw`)
+- Result pattern: ALL Application services return `Result` or `Result<T>`
 - NEVER execute code from analyzed repositories — static analysis only
 - All vector operations go through `IVectorStore` interface (not direct pgvector calls)
 - ConversationSummary must be generated before token count exceeds threshold
 - UserProfile updates require explicit user confirmation via ProfileUpdateSuggestion
+- Read `.claude/rules/coding-standards.md` for full coding rules
 
 ## Detailed Context
 For full entity model and relationships: read `docs/ARCHITECTURE_DECISIONS.md`

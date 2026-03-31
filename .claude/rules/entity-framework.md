@@ -3,14 +3,14 @@
 ## Configuration
 - Use Fluent API exclusively (no [Attributes] on entities)
 - One configuration class per entity: `KnowledgeItemConfiguration : IEntityTypeConfiguration<KnowledgeItem>`
-- All configurations in `Infrastructure/Persistence/Configurations/`
+- All configurations in `Data/Configurations/` (Postgres-specific in `Data.Postgres/Configurations/`)
 
 ## Data Types
 - Guid PKs: `HasDefaultValueSql("gen_random_uuid()")` or client-generated
-- String arrays (PreferredStack, KnownPatterns): PostgreSQL native `text[]` via `.HasColumnType("text[]")`
+- String collections (PreferredStack, KnownPatterns): `List<string>` stored as JSONB via `.HasColumnType("jsonb")`
 - Vector type: `Pgvector.EntityFrameworkCore` package, `vector` column type
 - DateTime: always UTC, use value converter if needed
-- Enums: store as string via `.HasConversion<string>()`
+- Enums: store as string via `.HasConversion<string>().HasMaxLength(50)`
 
 ## Relationships
 - KnowledgeItem → RepositoryInfo: 1:0..1 TPT (Table-Per-Type)

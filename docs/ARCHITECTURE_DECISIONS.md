@@ -5,10 +5,12 @@
 ```
 SentientArchitect/
 ├── src/
-│   ├── SentientArchitect.Domain/          # Entities, ValueObjects, Interfaces, Enums
-│   ├── SentientArchitect.Application/     # Use Cases, DTOs, Mappers, Agent orchestration
-│   ├── SentientArchitect.Infrastructure/  # EF Core, pgvector, Semantic Kernel, Roslyn, APIs
-│   └── SentientArchitect.API/             # Controllers, SignalR, Middleware
+│   ├── SentientArchitect.Domain/          # Entities, ValueObjects, IEntity/BaseEntity, Enums
+│   ├── SentientArchitect.Application/     # Interfaces, Result pattern, Use Cases (Vertical Slice)
+│   ├── SentientArchitect.Data/            # ApplicationContext, Entity Configurations, ApplicationUser
+│   ├── SentientArchitect.Data.Postgres/   # pgvector configs, HNSW, Migrations, DI
+│   ├── SentientArchitect.Infrastructure/  # Identity services, TokenService, Seeder, DI
+│   └── SentientArchitect.API/             # Minimal API endpoints, SignalR, Middleware
 ├── tests/
 │   ├── SentientArchitect.UnitTests/
 │   └── SentientArchitect.IntegrationTests/
@@ -16,7 +18,7 @@ SentientArchitect/
 ```
 
 ### Dependency Rule
-Domain ← Application ← Infrastructure ← Presentation. No layer references a layer above it. Domain has ZERO external dependencies (no NuGet packages except pure abstractions).
+Domain ← Application ← Data ← Data.Postgres / Infrastructure ← API. No layer references a layer above it. Domain has ZERO external dependencies (no NuGet packages). Interfaces live in Application (the consumer), implementations in Data/Infrastructure.
 
 ## Domain Entities — Complete Model
 
@@ -43,8 +45,8 @@ Persistent, accumulative context. Read by the Architecture Consultant before eve
 |----------|------|-------|
 | Id | Guid | PK |
 | UserId | Guid | FK → User (1:1) |
-| PreferredStack | string[] | e.g. ["C#", ".NET 9", "PostgreSQL"] |
-| KnownPatterns | string[] | e.g. ["CQRS", "Clean Architecture"] |
+| PreferredStack | List\<string\> | JSONB, e.g. ["C#", ".NET 9", "PostgreSQL"] |
+| KnownPatterns | List\<string\> | JSONB, e.g. ["CQRS", "Clean Architecture"] |
 | InfrastructureContext | string | Free text: "microservices on Azure with AKS" |
 | TeamSize | string | "solo" / "small" / "medium" / "large" |
 | ExperienceLevel | string | "junior" / "mid" / "senior" / "lead" |
@@ -406,9 +408,10 @@ var knowledgeAgent = new ChatCompletionAgent
 
 - **Inheritance**: Table-Per-Type (TPT) for KnowledgeItem → RepositoryInfo
 - **Fluent API** over attributes for all configurations
-- **String arrays** (PreferredStack, KnownPatterns, etc.) stored as PostgreSQL `text[]` native type
+- **String collections** (PreferredStack, KnownPatterns, etc.) stored as PostgreSQL `jsonb`
 - **Vector type** via `Pgvector.EntityFrameworkCore` NuGet package
 - **Indexes**: HNSW index on KnowledgeEmbedding.Embedding for fast similarity search
+- **Enums**: Stored as string via `.HasConversion<string>().HasMaxLength(50)` for readability and refactoring safety
 - **Guid PKs**: Generated client-side with `Guid.NewGuid()` or sequential GUIDs for index performance
 - **UTC timestamps**: All DateTime properties stored as UTC; conversion in EF Core value converters
 
