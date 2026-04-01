@@ -45,7 +45,8 @@
 | Auth endpoints | ✅ | POST /auth/register + /auth/login. JWT, Identity, IdentitySeeder |
 | Knowledge endpoints | ✅ | POST/GET/DELETE /knowledge, GET /knowledge/search |
 | Repository implementations | ✅ | KnowledgeRepository, TagRepository, PgVectorStore (raw SQL HNSW) |
-| NullEmbeddingService | ✅ | Placeholder in Infrastructure/AI/ — replaced when API key configured |
+| NullEmbeddingService | ✅ | Placeholder in Infrastructure/AI/ — still used as graceful fallback when OpenAI key absent |
+| OpenAIEmbeddingService | ✅ | Real implementation in Infrastructure/AI/ — active when AI:OpenAI:ApiKey is configured |
 
 ## Phase 2 — Architecture Consultant
 | Item | Status | Notes |
@@ -57,8 +58,11 @@
 | Profile use cases | ✅ | GetProfile, UpdateProfile, AcceptSuggestion, RejectSuggestion |
 | Admin use cases | ✅ | ReviewPublishRequest (Approve/Reject) |
 | Conversation/Profile endpoints | ✅ | Full CRUD. Admin policy: RequireAuthorization("Admin") |
-| ConversationSummary compaction | 📋 | Conversation.UpdateSummary exists — needs trigger logic in SK agent |
-| Semantic Kernel agent | 📋 | Needs AI API key configured first |
+| ConversationSummary compaction | 📋 | SummaryPlugin.SaveConversationSummaryAsync implemented — needs token threshold trigger |
+| Semantic Kernel agent — Knowledge | ✅ | ChatCompletionAgent with SearchPlugin + IngestPlugin. Anthropic Claude via IChatClient bridge |
+| Semantic Kernel agent — Consultant | ✅ | ChatCompletionAgent with ProfilePlugin + SummaryPlugin + SearchPlugin |
+| OpenAI embeddings | ✅ | OpenAIEmbeddingService wrapping ITextEmbeddingGenerationService (text-embedding-3-small, 1536 dims) |
+| Anthropic chat integration | ✅ | AnthropicClient → AsBuilder() → UseFunctionInvocation() → AsChatCompletionService() bridge |
 | SignalR streaming | 📋 | |
 
 ## Phase 3 — Code Guardian
