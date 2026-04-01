@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Mvc;
+using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Features.Trends.GetTrendSnapshots;
 using SentientArchitect.Application.Features.Trends.GetTrends;
@@ -5,39 +7,33 @@ using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.API.Endpoints;
 
-public static class TrendEndpoints
+public class TrendEndpoints : IEndpointModule
 {
-    public static IEndpointRouteBuilder MapTrendEndpoints(this IEndpointRouteBuilder app)
+    public void Map(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/trends")
             .WithTags("Trends");
 
-        group.MapGet("/", GetAllAsync)
-            .WithName("GetTrends")
-            .WithOpenApi();
+        group.MapGet("/", async (
+            [FromServices] GetTrendsUseCase useCase,
+            CancellationToken ct,
+            [FromQuery] TrendCategory? category = null) =>
+        {
+            var result = await useCase.ExecuteAsync(new GetTrendsRequest(category), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetTrends")
+        .WithOpenApi();
 
-        group.MapGet("/{id:guid}/snapshots", GetSnapshotsAsync)
-            .WithName("GetTrendSnapshots")
-            .WithOpenApi();
-
-        return app;
-    }
-
-    private static async Task<IResult> GetAllAsync(
-        GetTrendsUseCase useCase,
-        CancellationToken ct,
-        TrendCategory? category = null)
-    {
-        var result = await useCase.ExecuteAsync(new GetTrendsRequest(category), ct);
-        return result.ToHttpResult();
-    }
-
-    private static async Task<IResult> GetSnapshotsAsync(
-        Guid id,
-        GetTrendSnapshotsUseCase useCase,
-        CancellationToken ct)
-    {
-        var result = await useCase.ExecuteAsync(new GetTrendSnapshotsRequest(id), ct);
-        return result.ToHttpResult();
+        group.MapGet("/{id:guid}/snapshots", async (
+            [FromRoute] Guid id,
+            [FromServices] GetTrendSnapshotsUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new GetTrendSnapshotsRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetTrendSnapshots")
+        .WithOpenApi();
     }
 }

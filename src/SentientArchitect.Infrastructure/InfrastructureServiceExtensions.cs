@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 #pragma warning disable SKEXP0001
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -20,6 +21,7 @@ using SentientArchitect.Infrastructure.AI;
 using SentientArchitect.Infrastructure.Agents;
 using SentientArchitect.Infrastructure.Agents.Consultant;
 using SentientArchitect.Infrastructure.Agents.Knowledge;
+using SentientArchitect.Infrastructure.BackgroundJobs;
 using SentientArchitect.Infrastructure.Identity;
 
 namespace SentientArchitect.Infrastructure;
@@ -119,6 +121,17 @@ public static class InfrastructureServiceExtensions
         // ── Agent Factories (Singleton — plugins injected per-request via Create()) ──
         services.AddSingleton<KnowledgeAgentFactory>();
         services.AddSingleton<ConsultantAgentFactory>();
+
+        // ── HTTP Client ───────────────────────────────────────────────────────
+        services.AddHttpClient();
+
+        // ── Trends Radar ─────────────────────────────────────────────────────
+        services.AddScoped<ITrendScanner>(sp => new TrendScanner(
+            sp.GetRequiredService<IApplicationDbContext>(),
+            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetService<IChatCompletionService>(),
+            sp.GetRequiredService<ILogger<TrendScanner>>()));
+        services.AddHostedService<TrendScannerService>();
 
         return services;
     }

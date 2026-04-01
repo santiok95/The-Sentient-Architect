@@ -1,20 +1,6 @@
-using SentientArchitect.API.Endpoints;
+using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Hubs;
-using SentientArchitect.Application.Features.Admin.ReviewPublishRequest;
-using SentientArchitect.Application.Features.Conversations.ArchiveConversation;
-using SentientArchitect.Application.Features.Conversations.CreateConversation;
-using SentientArchitect.Application.Features.Conversations.GetConversations;
-using SentientArchitect.Application.Features.Knowledge.IngestKnowledge;
-using SentientArchitect.Application.Features.Knowledge.SearchKnowledge;
-using SentientArchitect.Application.Features.Profile.AcceptSuggestion;
-using SentientArchitect.Application.Features.Profile.GetProfile;
-using SentientArchitect.Application.Features.Profile.RejectSuggestion;
-using SentientArchitect.Application.Features.Profile.UpdateProfile;
-using SentientArchitect.Application.Features.Repositories.GetAnalysisReport;
-using SentientArchitect.Application.Features.Repositories.GetRepositories;
-using SentientArchitect.Application.Features.Repositories.SubmitRepository;
-using SentientArchitect.Application.Features.Trends.GetTrendSnapshots;
-using SentientArchitect.Application.Features.Trends.GetTrends;
+using SentientArchitect.Application;
 using SentientArchitect.Data.Postgres;
 using SentientArchitect.Infrastructure;
 
@@ -24,36 +10,10 @@ builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddApplication();
 
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", policy => policy.RequireRole("Admin")));
-
-// Use cases — Knowledge
-builder.Services.AddScoped<IngestKnowledgeUseCase>();
-builder.Services.AddScoped<SearchKnowledgeUseCase>();
-
-// Use cases — Conversations
-builder.Services.AddScoped<CreateConversationUseCase>();
-builder.Services.AddScoped<GetConversationsUseCase>();
-builder.Services.AddScoped<ArchiveConversationUseCase>();
-
-// Use cases — Profile
-builder.Services.AddScoped<GetProfileUseCase>();
-builder.Services.AddScoped<UpdateProfileUseCase>();
-builder.Services.AddScoped<AcceptSuggestionUseCase>();
-builder.Services.AddScoped<RejectSuggestionUseCase>();
-
-// Use cases — Repositories (Code Guardian)
-builder.Services.AddScoped<SubmitRepositoryUseCase>();
-builder.Services.AddScoped<GetRepositoriesUseCase>();
-builder.Services.AddScoped<GetAnalysisReportUseCase>();
-
-// Use cases — Trends Radar
-builder.Services.AddScoped<GetTrendsUseCase>();
-builder.Services.AddScoped<GetTrendSnapshotsUseCase>();
-
-// Use cases — Admin
-builder.Services.AddScoped<ReviewPublishRequestUseCase>();
 
 var app = builder.Build();
 
@@ -73,13 +33,6 @@ app.MapHub<IngestionHub>("/hubs/ingestion");
 app.MapHub<AnalysisHub>("/hubs/analysis");
 
 // Endpoints
-app.MapAuthEndpoints();
-app.MapKnowledgeEndpoints();
-app.MapConversationEndpoints();
-app.MapProfileEndpoints();
-app.MapRepositoryEndpoints();
-app.MapTrendEndpoints();
-app.MapAdminEndpoints();
-app.MapChatEndpoints();
+app.MapEndpointModules();
 
 app.Run();

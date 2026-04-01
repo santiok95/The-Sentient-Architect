@@ -1,109 +1,95 @@
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
+using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Profile.AcceptSuggestion;
 using SentientArchitect.Application.Features.Profile.GetProfile;
+using SentientArchitect.Application.Features.Profile.GetProfileSuggestions;
 using SentientArchitect.Application.Features.Profile.RejectSuggestion;
 using SentientArchitect.Application.Features.Profile.UpdateProfile;
-using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.API.Endpoints;
 
-public static class ProfileEndpoints
+public class ProfileEndpoints : IEndpointModule
 {
-    public static IEndpointRouteBuilder MapProfileEndpoints(this IEndpointRouteBuilder app)
+    public void Map(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/profile")
             .WithTags("Profile")
             .RequireAuthorization();
 
-        group.MapGet("/", GetAsync)
-            .WithName("GetProfile")
-            .WithOpenApi();
+        group.MapGet("/", async (
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] GetProfileUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetProfileRequest(userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetProfile")
+        .WithOpenApi();
 
-        group.MapPut("/", UpdateAsync)
-            .WithName("UpdateProfile")
-            .WithOpenApi();
+        group.MapPut("/", async (
+            [FromBody] UpdateProfileHttpRequest body,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] UpdateProfileUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
 
-        group.MapGet("/suggestions", GetSuggestionsAsync)
-            .WithName("GetProfileSuggestions")
-            .WithOpenApi();
+            var request = new UpdateProfileRequest(
+                userId,
+                body.PreferredStack,
+                body.KnownPatterns,
+                body.InfrastructureContext,
+                body.TeamSize,
+                body.ExperienceLevel,
+                body.CustomNotes);
 
-        group.MapPost("/suggestions/{id:guid}/accept", AcceptAsync)
-            .WithName("AcceptSuggestion")
-            .WithOpenApi();
+            var result = await useCase.ExecuteAsync(request, ct);
+            return result.ToHttpResult();
+        })
+        .WithName("UpdateProfile")
+        .WithOpenApi();
 
-        group.MapPost("/suggestions/{id:guid}/reject", RejectAsync)
-            .WithName("RejectSuggestion")
-            .WithOpenApi();
+        group.MapGet("/suggestions", async (
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] GetProfileSuggestionsUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetProfileSuggestionsRequest(userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetProfileSuggestions")
+        .WithOpenApi();
 
-        return app;
-    }
+        group.MapPost("/suggestions/{id:guid}/accept", async (
+            [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] AcceptSuggestionUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new AcceptSuggestionRequest(id, userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("AcceptSuggestion")
+        .WithOpenApi();
 
-    private static async Task<IResult> GetAsync(
-        IUserAccessor userAccessor,
-        GetProfileUseCase useCase,
-        CancellationToken ct)
-    {
-        var userId = userAccessor.GetCurrentUserId();
-        var result = await useCase.ExecuteAsync(new GetProfileRequest(userId), ct);
-        return result.ToHttpResult();
-    }
-
-    private static async Task<IResult> UpdateAsync(
-        UpdateProfileHttpRequest body,
-        IUserAccessor userAccessor,
-        UpdateProfileUseCase useCase,
-        CancellationToken ct)
-    {
-        var userId = userAccessor.GetCurrentUserId();
-
-        var request = new UpdateProfileRequest(
-            userId,
-            body.PreferredStack,
-            body.KnownPatterns,
-            body.InfrastructureContext,
-            body.TeamSize,
-            body.ExperienceLevel,
-            body.CustomNotes);
-
-        var result = await useCase.ExecuteAsync(request, ct);
-        return result.ToHttpResult();
-    }
-
-    private static async Task<IResult> GetSuggestionsAsync(
-        IUserAccessor userAccessor,
-        IApplicationDbContext db,
-        CancellationToken ct)
-    {
-        var userId      = userAccessor.GetCurrentUserId();
-        var suggestions = await db.ProfileUpdateSuggestions
-            .Where(s => s.UserId == userId && s.Status == SuggestionStatus.Pending)
-            .AsNoTracking()
-            .ToListAsync(ct);
-        return Results.Ok(suggestions);
-    }
-
-    private static async Task<IResult> AcceptAsync(
-        Guid id,
-        IUserAccessor userAccessor,
-        AcceptSuggestionUseCase useCase,
-        CancellationToken ct)
-    {
-        var userId = userAccessor.GetCurrentUserId();
-        var result = await useCase.ExecuteAsync(new AcceptSuggestionRequest(id, userId), ct);
-        return result.ToHttpResult();
-    }
-
-    private static async Task<IResult> RejectAsync(
-        Guid id,
-        IUserAccessor userAccessor,
-        RejectSuggestionUseCase useCase,
-        CancellationToken ct)
-    {
-        var userId = userAccessor.GetCurrentUserId();
-        var result = await useCase.ExecuteAsync(new RejectSuggestionRequest(id, userId), ct);
-        return result.ToHttpResult();
+        group.MapPost("/suggestions/{id:guid}/reject", async (
+            [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] RejectSuggestionUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new RejectSuggestionRequest(id, userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("RejectSuggestion")
+        .WithOpenApi();
     }
 
     private record UpdateProfileHttpRequest(
