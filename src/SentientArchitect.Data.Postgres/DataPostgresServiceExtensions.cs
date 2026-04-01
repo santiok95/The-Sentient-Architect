@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Data.Postgres.Repositories;
 
 namespace SentientArchitect.Data.Postgres;
 
@@ -29,6 +31,10 @@ public static class DataPostgresServiceExtensions
                     maxRetryDelay: TimeSpan.FromSeconds(30),
                     errorCodesToAdd: null);
             }));
+
+        services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
+        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<IVectorStore, PgVectorStore>();
 
         return services;
     }
