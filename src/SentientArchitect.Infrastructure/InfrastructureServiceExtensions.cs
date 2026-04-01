@@ -122,8 +122,9 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<KnowledgeAgentFactory>();
         services.AddSingleton<ConsultantAgentFactory>();
 
-        // ── HTTP Client ───────────────────────────────────────────────────────
+        // ── HTTP Client & Cloud Resilience (Polly v8) ─────────────────────────────────
         services.AddHttpClient();
+        services.ConfigureHttpClientDefaults(b => b.AddStandardResilienceHandler());
 
         // ── Trends Radar ─────────────────────────────────────────────────────
         services.AddScoped<ITrendScanner>(sp => new TrendScanner(

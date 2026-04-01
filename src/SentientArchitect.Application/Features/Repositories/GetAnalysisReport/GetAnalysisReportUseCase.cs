@@ -16,7 +16,7 @@ public class GetAnalysisReportUseCase(IApplicationDbContext db)
             .FirstOrDefaultAsync(r => r.Id == request.ReportId, ct);
 
         if (report is null)
-            return Result<GetAnalysisReportResponse>.Failure([$"Report '{request.ReportId}' not found."]);
+            return Result<GetAnalysisReportResponse>.Failure([$"Report '{request.ReportId}' not found."], ErrorType.NotFound);
 
         var findings = report.Findings
             .Select(f => new FindingItem(f.Severity, f.Category, f.Message, f.FilePath, f.LineNumber))
