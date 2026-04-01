@@ -34,12 +34,18 @@ dotnet ef migrations add <Name> -p src/SentientArchitect.Data.Postgres -s src/Se
 - Result pattern for all Application services (no exceptions for business logic)
 - Fluent API for all EF Core configurations (never data annotations)
 - Enums stored as string via `.HasConversion<string>().HasMaxLength(50)` in EF configs
-- Interfaces in Application, implementations in Infrastructure/Data
 - `List<string>` with JSONB for string collections (never `string[]`)
 - All DateTime properties stored as UTC
 - Guid PKs generated client-side
 - Async/await throughout; suffix async methods with `Async`
 - Every entity includes `UserId` and `TenantId` for multi-tenancy
+
+## Data Access — NO Repository Pattern
+- **NO** `IXxxRepository` interfaces. `DbContext` already IS the repository + unit of work.
+- Inject `IApplicationDbContext` directly in use cases (Jason Taylor style).
+- Use EF Core LINQ directly: `db.KnowledgeItems.Add(...)`, `db.KnowledgeItems.FirstOrDefaultAsync(...)`.
+- `AsNoTracking()` on all read-only queries in endpoints/use cases.
+- `IVectorStore` is kept — it's a real abstraction over pgvector, not a CRUD wrapper.
 
 ## Authentication & Authorization
 - ASP.NET Identity with JWT bearer tokens

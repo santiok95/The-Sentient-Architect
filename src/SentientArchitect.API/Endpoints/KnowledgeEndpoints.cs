@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Knowledge.IngestKnowledge;
@@ -81,22 +82,32 @@ public static class KnowledgeEndpoints
 
     private static async Task<IResult> ListAsync(
         IUserAccessor userAccessor,
-        IKnowledgeRepository repository,
+        IApplicationDbContext db,
         CancellationToken ct)
     {
         var userId = userAccessor.GetCurrentUserId();
-        var items  = await repository.GetByUserAsync(userId, ct);
+        var items  = await db.KnowledgeItems
+            .Where(k => k.UserId == userId)
+            .AsNoTracking()
+            .ToListAsync(ct);
         return Results.Ok(items);
     }
 
     private static async Task<IResult> DeleteAsync(
         Guid id,
-        IKnowledgeRepository repository,
+        IApplicationDbContext db,
         IVectorStore vectorStore,
         CancellationToken ct)
     {
         await vectorStore.DeleteByKnowledgeItemAsync(id, ct);
-        await repository.DeleteAsync(id, ct);
+
+        var item = await db.KnowledgeItems.FindAsync([id], ct);
+        if (item is not null)
+        {
+            db.KnowledgeItems.Remove(item);
+            await db.SaveChangesAsync(ct);
+        }
+
         return Results.NoContent();
     }
 

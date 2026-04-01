@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Domain.Entities;
 
 namespace SentientArchitect.Data;
 
-public class ApplicationContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+public class ApplicationContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IApplicationDbContext
 {
     public ApplicationContext(DbContextOptions<ApplicationContext> options)
         : base(options)
@@ -18,11 +19,24 @@ public class ApplicationContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<KnowledgeItemTag> KnowledgeItemTags => Set<KnowledgeItemTag>();
 
+    // --- Code Guardian ---
+    public DbSet<RepositoryInfo> Repositories => Set<RepositoryInfo>();
+    public DbSet<AnalysisReport> AnalysisReports => Set<AnalysisReport>();
+    public DbSet<AnalysisFinding> AnalysisFindings => Set<AnalysisFinding>();
+
+    // --- Consultant Agent ---
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
+
     // --- Shared / Cross-cutting ---
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<ProfileUpdateSuggestion> ProfileUpdateSuggestions => Set<ProfileUpdateSuggestion>();
     public DbSet<ContentPublishRequest> ContentPublishRequests => Set<ContentPublishRequest>();
     public DbSet<TokenUsageTracker> TokenUsageTrackers => Set<TokenUsageTracker>();
+
+    // --- Trends Radar ---
+    public DbSet<TechnologyTrend> TechnologyTrends => Set<TechnologyTrend>();
+    public DbSet<TrendSnapshot> TrendSnapshots => Set<TrendSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

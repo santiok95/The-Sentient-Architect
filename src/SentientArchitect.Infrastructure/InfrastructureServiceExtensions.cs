@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Data;
+using SentientArchitect.Infrastructure.AI;
 using SentientArchitect.Infrastructure.Identity;
 
 namespace SentientArchitect.Infrastructure;
@@ -63,6 +64,9 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IUserAccessor, UserAccessor>();
         services.AddScoped<IdentitySeeder>();
+
+        // ── AI services (placeholder — replaced when API key is configured) ─
+        services.AddScoped<IEmbeddingService, NullEmbeddingService>();
 
         return services;
     }

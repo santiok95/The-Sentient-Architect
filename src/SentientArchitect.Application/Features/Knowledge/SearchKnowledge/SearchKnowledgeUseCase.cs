@@ -1,24 +1,14 @@
+using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
 
 namespace SentientArchitect.Application.Features.Knowledge.SearchKnowledge;
 
-public class SearchKnowledgeUseCase
+public class SearchKnowledgeUseCase(
+    IApplicationDbContext db,
+    IVectorStore vectorStore,
+    IEmbeddingService embeddingService)
 {
-    private readonly IVectorStore _vectorStore;
-    private readonly IEmbeddingService _embeddingService;
-    private readonly IKnowledgeRepository _knowledgeRepository;
-
-    public SearchKnowledgeUseCase(
-        IVectorStore vectorStore,
-        IEmbeddingService embeddingService,
-        IKnowledgeRepository knowledgeRepository)
-    {
-        _vectorStore = vectorStore;
-        _embeddingService = embeddingService;
-        _knowledgeRepository = knowledgeRepository;
-    }
-
     public async Task<Result<SearchKnowledgeResponse>> ExecuteAsync(
         SearchKnowledgeRequest request,
         CancellationToken ct = default)
@@ -28,10 +18,10 @@ public class SearchKnowledgeUseCase
             return Result<SearchKnowledgeResponse>.Failure(["Query is required."]);
 
         // 2. Generate embedding for query
-        var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(request.Query, ct);
+        var queryEmbedding = await embeddingService.GenerateEmbeddingAsync(request.Query, ct);
 
         // 3. Vector similarity search
-        var vectorResults = await _vectorStore.SearchSimilarAsync(
+        var vectorResults = await vectorStore.SearchSimilarAsync(
             queryEmbedding,
             request.UserId,
             request.TenantId,
@@ -45,7 +35,9 @@ public class SearchKnowledgeUseCase
 
         foreach (var vectorResult in vectorResults)
         {
-            var item = await _knowledgeRepository.GetByIdAsync(vectorResult.KnowledgeItemId, ct);
+            var item = await db.KnowledgeItems
+                .AsNoTracking()
+                .FirstOrDefaultAsync(k => k.Id == vectorResult.KnowledgeItemId, ct);
 
             if (item is null)
                 continue;

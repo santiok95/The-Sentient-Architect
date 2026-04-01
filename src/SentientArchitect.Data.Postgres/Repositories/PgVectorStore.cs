@@ -3,12 +3,11 @@ using Npgsql;
 using Pgvector;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Models;
-using SentientArchitect.Data;
 using SentientArchitect.Domain.Entities;
 
 namespace SentientArchitect.Data.Postgres.Repositories;
 
-public class PgVectorStore(ApplicationContext context) : IVectorStore
+public class PgVectorStore(IApplicationDbContext context) : IVectorStore
 {
     public async Task StoreEmbeddingAsync(
         Guid knowledgeItemId,

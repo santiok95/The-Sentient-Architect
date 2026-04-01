@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
 using SentientArchitect.Domain.Entities;
@@ -5,25 +6,11 @@ using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Application.Features.Knowledge.IngestKnowledge;
 
-public class IngestKnowledgeUseCase
+public class IngestKnowledgeUseCase(
+    IApplicationDbContext db,
+    IVectorStore vectorStore,
+    IEmbeddingService embeddingService)
 {
-    private readonly IKnowledgeRepository _knowledgeRepository;
-    private readonly IVectorStore _vectorStore;
-    private readonly IEmbeddingService _embeddingService;
-    private readonly ITagRepository _tagRepository;
-
-    public IngestKnowledgeUseCase(
-        IKnowledgeRepository knowledgeRepository,
-        IVectorStore vectorStore,
-        IEmbeddingService embeddingService,
-        ITagRepository tagRepository)
-    {
-        _knowledgeRepository = knowledgeRepository;
-        _vectorStore = vectorStore;
-        _embeddingService = embeddingService;
-        _tagRepository = tagRepository;
-    }
-
     public async Task<Result<IngestKnowledgeResponse>> ExecuteAsync(
         IngestKnowledgeRequest request,
         CancellationToken ct = default)
@@ -52,7 +39,8 @@ public class IngestKnowledgeUseCase
         item.MarkAsProcessing();
 
         // 3. Persist initial state
-        await _knowledgeRepository.AddAsync(item, ct);
+        db.KnowledgeItems.Add(item);
+        await db.SaveChangesAsync(ct);
 
         try
         {
@@ -62,8 +50,8 @@ public class IngestKnowledgeUseCase
             // 5 & 6. Generate embeddings and store each chunk
             for (var i = 0; i < chunks.Count; i++)
             {
-                var embedding = await _embeddingService.GenerateEmbeddingAsync(chunks[i], ct);
-                await _vectorStore.StoreEmbeddingAsync(item.Id, i, chunks[i], embedding, ct);
+                var embedding = await embeddingService.GenerateEmbeddingAsync(chunks[i], ct);
+                await vectorStore.StoreEmbeddingAsync(item.Id, i, chunks[i], embedding, ct);
             }
 
             // 7. Handle tags
@@ -74,16 +62,21 @@ public class IngestKnowledgeUseCase
                     if (string.IsNullOrWhiteSpace(tagName))
                         continue;
 
-                    var tag = await _tagRepository.GetByNameAndCategoryAsync(
-                        tagName.Trim(), TagCategory.Custom, ct);
+                    var normalizedName = tagName.Trim();
+
+                    var tag = await db.Tags
+                        .FirstOrDefaultAsync(t => t.Name == normalizedName && t.Category == TagCategory.Custom, ct);
 
                     if (tag is null)
                     {
-                        tag = new Tag(tagName.Trim(), TagCategory.Custom);
-                        await _tagRepository.AddAsync(tag, ct);
+                        tag = new Tag(normalizedName, TagCategory.Custom);
+                        db.Tags.Add(tag);
+                        await db.SaveChangesAsync(ct);
                     }
 
-                    await _tagRepository.AddTagToKnowledgeItemAsync(item.Id, tag.Id, ct);
+                    var kitag = new KnowledgeItemTag { KnowledgeItemId = item.Id, TagId = tag.Id };
+                    db.KnowledgeItemTags.Add(kitag);
+                    await db.SaveChangesAsync(ct);
                 }
             }
 
@@ -95,7 +88,7 @@ public class IngestKnowledgeUseCase
             item.MarkAsCompleted(summary);
 
             // 9. Persist final state
-            await _knowledgeRepository.UpdateAsync(item, ct);
+            await db.SaveChangesAsync(ct);
 
             // 10. Return success
             return Result<IngestKnowledgeResponse>.SuccessWith(
@@ -104,7 +97,7 @@ public class IngestKnowledgeUseCase
         catch (Exception ex)
         {
             item.MarkAsFailed();
-            await _knowledgeRepository.UpdateAsync(item, ct);
+            await db.SaveChangesAsync(ct);
 
             return Result<IngestKnowledgeResponse>.Failure(
                 [$"Ingestion failed: {ex.Message}"]);

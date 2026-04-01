@@ -236,6 +236,86 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.AnalysisFinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AnalysisReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("LineNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalysisReportId", "Severity");
+
+                    b.ToTable("AnalysisFindings", (string)null);
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.AnalysisReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CriticalFindings")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RepositoryInfoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text");
+
+                    b.Property<int>("TotalFindings")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryInfoId");
+
+                    b.ToTable("AnalysisReports", (string)null);
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.ContentPublishRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -277,6 +357,82 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.HasIndex("RequestedByUserId");
 
                     b.ToTable("ContentPublishRequests", (string)null);
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("TokenCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("Conversations", (string)null);
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.ConversationMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<List<Guid>>("RetrievedContextIds")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.ToTable("ConversationMessages", (string)null);
                 });
 
             modelBuilder.Entity("SentientArchitect.Domain.Entities.KnowledgeEmbedding", b =>
@@ -425,6 +581,58 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.ToTable("ProfileUpdateSuggestions", (string)null);
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.RepositoryInfo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ContributorCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultBranch")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("LastAnalyzedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastCommitAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LocalPath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("RepositoryUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int?>("StarCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Trust")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Repositories", (string)null);
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -453,6 +661,54 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .IsUnique();
 
                     b.ToTable("Tags", (string)null);
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.TechnologyTrend", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("LastScannedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<float>("RelevanceScore")
+                        .HasColumnType("real");
+
+                    b.PrimitiveCollection<List<string>>("Sources")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Category", "Direction");
+
+                    b.ToTable("TechnologyTrends", (string)null);
                 });
 
             modelBuilder.Entity("SentientArchitect.Domain.Entities.TokenUsageTracker", b =>
@@ -495,6 +751,41 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .IsUnique();
 
                     b.ToTable("TokenUsageTrackers", (string)null);
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.TrendSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<float>("Score")
+                        .HasColumnType("real");
+
+                    b.Property<Guid>("TechnologyTrendId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TechnologyTrendId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("TrendSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("SentientArchitect.Domain.Entities.User", b =>
@@ -627,6 +918,28 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.AnalysisFinding", b =>
+                {
+                    b.HasOne("SentientArchitect.Domain.Entities.AnalysisReport", "AnalysisReport")
+                        .WithMany("Findings")
+                        .HasForeignKey("AnalysisReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AnalysisReport");
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.AnalysisReport", b =>
+                {
+                    b.HasOne("SentientArchitect.Domain.Entities.RepositoryInfo", "RepositoryInfo")
+                        .WithMany("Reports")
+                        .HasForeignKey("RepositoryInfoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RepositoryInfo");
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.ContentPublishRequest", b =>
                 {
                     b.HasOne("SentientArchitect.Domain.Entities.KnowledgeItem", "KnowledgeItem")
@@ -636,6 +949,26 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .IsRequired();
 
                     b.Navigation("KnowledgeItem");
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.Conversation", b =>
+                {
+                    b.HasOne("SentientArchitect.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.ConversationMessage", b =>
+                {
+                    b.HasOne("SentientArchitect.Domain.Entities.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
                 });
 
             modelBuilder.Entity("SentientArchitect.Domain.Entities.KnowledgeEmbedding", b =>
@@ -677,6 +1010,26 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.Navigation("Tag");
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.RepositoryInfo", b =>
+                {
+                    b.HasOne("SentientArchitect.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.TrendSnapshot", b =>
+                {
+                    b.HasOne("SentientArchitect.Domain.Entities.TechnologyTrend", "TechnologyTrend")
+                        .WithMany("Snapshots")
+                        .HasForeignKey("TechnologyTrendId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TechnologyTrend");
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.UserProfile", b =>
                 {
                     b.HasOne("SentientArchitect.Domain.Entities.User", "User")
@@ -688,6 +1041,16 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.AnalysisReport", b =>
+                {
+                    b.Navigation("Findings");
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.KnowledgeItem", b =>
                 {
                     b.Navigation("Embeddings");
@@ -695,9 +1058,19 @@ namespace SentientArchitect.Data.Postgres.Migrations
                     b.Navigation("KnowledgeItemTags");
                 });
 
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.RepositoryInfo", b =>
+                {
+                    b.Navigation("Reports");
+                });
+
             modelBuilder.Entity("SentientArchitect.Domain.Entities.Tag", b =>
                 {
                     b.Navigation("KnowledgeItemTags");
+                });
+
+            modelBuilder.Entity("SentientArchitect.Domain.Entities.TechnologyTrend", b =>
+                {
+                    b.Navigation("Snapshots");
                 });
 #pragma warning restore 612, 618
         }

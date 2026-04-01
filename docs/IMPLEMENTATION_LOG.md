@@ -40,36 +40,49 @@
 | pgvector setup | ✅ | vector(1536) hardcoded (ADR-001), HNSW index with cosine ops |
 | ADR-001 | ✅ | Hardcoded vector(1536) for HNSW performance |
 | ADR-002 | ✅ | FK via Fluent API without navigation property (cross-layer) |
-| Ingestion pipeline | 📋 | Background job: extract → chunk → embed → store |
-| RAG query flow | 📋 | Embed question → search → fetch metadata → LLM |
-| Basic API endpoints | 📋 | |
+| Ingestion pipeline | ✅ | IngestKnowledgeUseCase: chunk → embed (NullEmbeddingService) → pgvector |
+| RAG query flow | ✅ | SearchKnowledgeUseCase: embed query → IVectorStore → fetch items |
+| Auth endpoints | ✅ | POST /auth/register + /auth/login. JWT, Identity, IdentitySeeder |
+| Knowledge endpoints | ✅ | POST/GET/DELETE /knowledge, GET /knowledge/search |
+| Repository implementations | ✅ | KnowledgeRepository, TagRepository, PgVectorStore (raw SQL HNSW) |
+| NullEmbeddingService | ✅ | Placeholder in Infrastructure/AI/ — replaced when API key configured |
 
 ## Phase 2 — Architecture Consultant
 | Item | Status | Notes |
 |------|--------|-------|
-| Conversation entities | 📋 | |
-| UserProfile + suggestions | 📋 | |
-| ConversationSummary compaction | 📋 | |
-| Semantic Kernel agent | 📋 | |
+| Conversation entities | ✅ | Conversation + ConversationMessage. Behavior: AddMessage, UpdateSummary, Archive |
+| EF configs + migration | ✅ | Migration: AddPhase2345Tables (2026-04-01) |
+| UserProfile + suggestions | ✅ | UserProfile Update* methods, ProfileUpdateSuggestion Accept/Reject |
+| Conversation use cases | ✅ | CreateConversation, GetConversations, ArchiveConversation |
+| Profile use cases | ✅ | GetProfile, UpdateProfile, AcceptSuggestion, RejectSuggestion |
+| Admin use cases | ✅ | ReviewPublishRequest (Approve/Reject) |
+| Conversation/Profile endpoints | ✅ | Full CRUD. Admin policy: RequireAuthorization("Admin") |
+| ConversationSummary compaction | 📋 | Conversation.UpdateSummary exists — needs trigger logic in SK agent |
+| Semantic Kernel agent | 📋 | Needs AI API key configured first |
 | SignalR streaming | 📋 | |
 
 ## Phase 3 — Code Guardian
 | Item | Status | Notes |
 |------|--------|-------|
-| RepositoryInfo entities | 📋 | |
-| Git clone service | 📋 | |
+| RepositoryInfo entities | ✅ | RepositoryInfo, AnalysisReport, AnalysisFinding + enums |
+| EF configs | ✅ | Included in AddPhase2345Tables migration |
+| Use cases | ✅ | SubmitRepository, GetRepositories, GetAnalysisReport |
+| Repository endpoints | ✅ | POST/GET /repositories, GET /repositories/{id}/reports, GET /reports/{id} |
+| Git clone service | 📋 | ICodeAnalyzer not implemented yet |
 | Roslyn analysis | 📋 | |
 | Dependency scanner | 📋 | |
-| AnalysisReport generation | 📋 | |
+| AnalysisReport generation | 📋 | Background job — needs Roslyn + Git integration |
 
 ## Phase 4 — Trends Radar
 | Item | Status | Notes |
 |------|--------|-------|
-| TechnologyTrend entities | 📋 | |
-| Source configuration | 📋 | |
-| Scanning background job | 📋 | |
+| TechnologyTrend entities | ✅ | TechnologyTrend + TrendSnapshot + enums |
+| EF configs | ✅ | Included in AddPhase2345Tables migration |
+| Use cases | ✅ | GetTrends (with optional category filter), GetTrendSnapshots |
+| Trend endpoints | ✅ | GET /trends, GET /trends/{id}/snapshots (public, no auth) |
+| Source configuration | 📋 | Where to scan for trends (GitHub, HN, etc.) |
+| Scanning background job | 📋 | IHostedService — needs AI + sources |
 | Relevance scoring | 📋 | |
-| TrendSnapshot tracking | 📋 | |
 
 ## Refactoring — Modernization (2026-03-31)
 

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,8 +31,7 @@ public static class DataPostgresServiceExtensions
                     errorCodesToAdd: null);
             }));
 
-        services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
-        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationContext>());
         services.AddScoped<IVectorStore, PgVectorStore>();
 
         return services;
