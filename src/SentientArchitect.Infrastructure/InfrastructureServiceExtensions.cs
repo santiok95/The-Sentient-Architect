@@ -116,7 +116,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ProfilePlugin>();
         services.AddScoped<SummaryPlugin>();
 
-        // ── Agent Factories (Singleton) ────────────────────────────────────────
+        // ── Agent Factories (Singleton — plugins injected per-request via Create()) ──
         services.AddSingleton<KnowledgeAgentFactory>();
         services.AddSingleton<ConsultantAgentFactory>();
 

@@ -7,11 +7,7 @@ using SentientArchitect.Infrastructure.Agents.Knowledge;
 
 namespace SentientArchitect.Infrastructure.Agents;
 
-public sealed class ConsultantAgentFactory(
-    IChatCompletionService chatService,
-    ProfilePlugin profilePlugin,
-    SummaryPlugin summaryPlugin,
-    SearchPlugin searchPlugin)
+public sealed class ConsultantAgentFactory(IChatCompletionService chatService)
 {
     private const string Instructions = """
         You are the Architecture Consultant for The Sentient Architect.
@@ -32,7 +28,10 @@ public sealed class ConsultantAgentFactory(
         - Be direct and actionable — give specific recommendations, not vague suggestions
         """;
 
-    public ChatCompletionAgent Create()
+    public ChatCompletionAgent Create(
+        ProfilePlugin profilePlugin,
+        SummaryPlugin summaryPlugin,
+        SearchPlugin searchPlugin)
     {
         var builder = Kernel.CreateBuilder();
         builder.Services.AddSingleton(chatService);

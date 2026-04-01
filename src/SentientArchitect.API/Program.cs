@@ -1,5 +1,7 @@
 using SentientArchitect.API.Endpoints;
+using SentientArchitect.API.Hubs;
 using SentientArchitect.Application.Features.Admin.ReviewPublishRequest;
+using SentientArchitect.Application.Features.Conversations.ArchiveConversation;
 using SentientArchitect.Application.Features.Conversations.CreateConversation;
 using SentientArchitect.Application.Features.Conversations.GetConversations;
 using SentientArchitect.Application.Features.Knowledge.IngestKnowledge;
@@ -19,6 +21,7 @@ using SentientArchitect.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -32,6 +35,7 @@ builder.Services.AddScoped<SearchKnowledgeUseCase>();
 // Use cases — Conversations
 builder.Services.AddScoped<CreateConversationUseCase>();
 builder.Services.AddScoped<GetConversationsUseCase>();
+builder.Services.AddScoped<ArchiveConversationUseCase>();
 
 // Use cases — Profile
 builder.Services.AddScoped<GetProfileUseCase>();
@@ -63,6 +67,11 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// SignalR hubs
+app.MapHub<ConversationHub>("/hubs/conversation");
+app.MapHub<IngestionHub>("/hubs/ingestion");
+app.MapHub<AnalysisHub>("/hubs/analysis");
+
 // Endpoints
 app.MapAuthEndpoints();
 app.MapKnowledgeEndpoints();
@@ -71,5 +80,6 @@ app.MapProfileEndpoints();
 app.MapRepositoryEndpoints();
 app.MapTrendEndpoints();
 app.MapAdminEndpoints();
+app.MapChatEndpoints();
 
 app.Run();
