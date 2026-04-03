@@ -23,6 +23,7 @@ using SentientArchitect.Infrastructure.Agents;
 using SentientArchitect.Infrastructure.Agents.Consultant;
 using SentientArchitect.Infrastructure.Agents.Knowledge;
 using SentientArchitect.Infrastructure.BackgroundJobs;
+using SentientArchitect.Infrastructure.Chat;
 using SentientArchitect.Infrastructure.Guardian;
 using SentientArchitect.Infrastructure.Identity;
 
@@ -127,6 +128,10 @@ public static class InfrastructureServiceExtensions
         // ── Agent Factories (Singleton — plugins injected per-request via Create()) ──
         services.AddSingleton<KnowledgeAgentFactory>();
         services.AddSingleton<ConsultantAgentFactory>();
+
+        // ── Chat orchestration adapters ─────────────────────────────────────
+        services.AddScoped<AnthropicOrchestrator>();
+        services.AddScoped<IChatExecutionService, ChatExecutionService>();
 
         // ── HTTP Client & Cloud Resilience (Polly v8) ─────────────────────────────────
         services.AddHttpClient();

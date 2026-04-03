@@ -106,3 +106,12 @@
 
 ## Issues & Solutions
 _None yet — will be populated during implementation._
+
+## Follow-ups Agendados (No Bloqueantes)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| CORS endurecimiento para despliegue | 📋 | Deferred por decision explicita del owner. Mantener policy actual en dev; antes de deploy cambiar a origins explicitos por ambiente. |
+| Autorizacion de membresia a grupos SignalR | 📋 | Pendiente: validar ownership/tenant antes de `AddToGroupAsync` en ConversationHub, AnalysisHub e IngestionHub. |
+| Refactor ChatEndpoints (separacion de responsabilidades) | 📋 | Prioridad alta. Implementar plan por etapas definido en `docs/REFACTORING_PLAN.md` para reducir riesgo de regresion. |
+| SearchPlugin keyword fallback escalable | 📋 | Pendiente: mover filtro de keywords a DB (FTS/trigram/ILIKE indexado), evitar `ToListAsync` + filtrado en memoria en datasets grandes. |
