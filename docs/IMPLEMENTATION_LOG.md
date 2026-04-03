@@ -103,6 +103,24 @@
 | 9 | Evaluar ErrorOr vs Result | ⬜ | Baja | Pending decision |
 | 10 | Vertical slices | ⬜ | Baja | Se aplica cuando arranque implementación de features |
 | 11 | Centralizar Identity en Infra | ✅ | Alta | Desacoplar `AddIdentityCore` de PostgreSQL para pureza arquitectónica |
+| 12 | Desacople de Chat (Etapa 1) | ✅ | Alta | Orquestación movida de API a Application e Infrastructure |
+
+## Architecture Decisions — Chat Decoupling (2026-04-03)
+
+### Stage 1 — Orchestration & Decoupling
+- **What:** Se movió la orquestación del flujo de chat (loops de herramientas, prompting y lógica de agentes) desde los endpoints de la API hacia `ExecuteChatUseCase` (Application) e `IChatExecutionService` (Infrastructure).
+- **Why:** Reducir la complejidad de los endpoints (Fat Controller), mejorar la mantenibilidad y desacoplar la lógica de negocio de los detalles técnicos del proveedor de IA (Semantic Kernel/Anthropic).
+- **Lección Aprendida:** El endpoint debe limitarse a coordinar el transporte (SignalR/HTTP) y el mapeo de resultados; la "mecánica" de la IA debe estar aislada.
+
+### Pattern — Isolated Anthropic Manual Loop
+- **What:** Se encapsuló el loop manual de herramientas (while + parseo de bloques invoke/parameter) en un `AnthropicOrchestrator` dentro de Infrastructure.
+- **Why:** El bridge nativo entre SK y Claude 3.5 Sonnet ha demostrado inestabilidades en el parseo de herramientas. Aislar este "workaround" protege la estabilidad de las capas superiores.
+- **Lección Aprendida:** Si un bridge de terceros falla, el fallback manual debe implementarse como un adaptador de infraestructura, nunca filtrarse al caso de uso ni al endpoint.
+
+### Standard — Result Pattern End-to-End
+- **What:** Se estandarizó el uso de `Result<T>` en todo el flujo: validación de entrada -> persistencia de mensaje de usuario -> ejecución de chat -> persistencia de respuesta del asistente -> mapeo final a HTTP.
+- **Why:** Garantizar un flujo predecible, evitar excepciones de control y asegurar que los errores en el flujo de SignalR (`ReceiveError`) se reporten de forma coherente.
+- **Lección Aprendida:** Un flujo de resultados consistente simplifica drásticamente el manejo de errores en sistemas asíncronos y distribuidos como SignalR.
 
 ## Issues & Solutions
 _None yet — will be populated during implementation._
