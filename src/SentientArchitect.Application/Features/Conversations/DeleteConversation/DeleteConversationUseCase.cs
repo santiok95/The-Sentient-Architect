@@ -7,7 +7,7 @@ public record DeleteConversationRequest(Guid ConversationId);
 
 public class DeleteConversationUseCase(IApplicationDbContext db)
 {
-    public async Task<Result<bool>> ExecuteAsync(DeleteConversationRequest request, CancellationToken ct = default)
+    public async Task<Result> ExecuteAsync(DeleteConversationRequest request, CancellationToken ct = default)
     {
         var conversation = await db.Conversations.FindAsync(new object[] { request.ConversationId }, ct);
         if (conversation is not null)
@@ -16,6 +16,6 @@ public class DeleteConversationUseCase(IApplicationDbContext db)
             await db.SaveChangesAsync(ct);
         }
 
-        return Result<bool>.SuccessWith(true);
+        return Result.Success;
     }
 }

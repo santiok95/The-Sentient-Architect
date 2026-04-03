@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 #pragma warning disable SKEXP0001
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Embeddings;
+using Microsoft.SemanticKernel;
 #pragma warning restore SKEXP0001
 #pragma warning disable SKEXP0010
 using Microsoft.SemanticKernel.Connectors.OpenAI;
@@ -84,15 +85,18 @@ public static class InfrastructureServiceExtensions
         var anthropicKey = configuration["AI:Anthropic:ApiKey"];
         if (!string.IsNullOrWhiteSpace(anthropicKey))
         {
-            IChatClient chatClient = new AnthropicClient(anthropicKey).Messages
-                .AsBuilder()
-                .UseFunctionInvocation()
-                .Build();
-
             var chatModel = configuration["AI:Anthropic:ChatModel"] ?? "claude-haiku-4-5-20251001";
 
+            IChatClient anthropicClient = new AnthropicClient(anthropicKey).Messages
+                .AsBuilder()
+                .ConfigureOptions(o => o.ModelId ??= chatModel)
+                .Build();
+
+            // SK 1.74.0 natively bridges IChatClient → IChatCompletionService
+            // This handles tool calling, streaming, and all protocol mapping automatically
 #pragma warning disable SKEXP0001
-            services.AddSingleton<IChatCompletionService>(new ChatClientWrapper(chatClient, chatModel));
+            services.AddSingleton<IChatCompletionService>(sp =>
+                anthropicClient.AsChatCompletionService());
 #pragma warning restore SKEXP0001
         }
 

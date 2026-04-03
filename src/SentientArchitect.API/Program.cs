@@ -29,6 +29,16 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 });
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.SetIsOriginAllowed(_ => true)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 builder.Services.AddSignalR();
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -52,6 +62,7 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+app.UseCors();
 app.UseExceptionHandler();
 
 app.UseHttpsRedirection();

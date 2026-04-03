@@ -1,35 +1,80 @@
+using System;
 using System.ComponentModel;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using SentientArchitect.Application.Common.Interfaces;
 
 namespace SentientArchitect.Infrastructure.Agents.Knowledge;
 
 public sealed class SearchPlugin(
+    IApplicationDbContext db,
     IVectorStore vectorStore,
-    IEmbeddingService embeddingService)
+    IEmbeddingService embeddingService,
+    IUserAccessor userAccessor,
+    ILogger<SearchPlugin> logger)
 {
     [KernelFunction, Description("Search the knowledge base using natural language. Returns relevant articles, notes, and repo analyses matching the query.")]
     public async Task<string> SearchByMeaningAsync(
         [Description("The user's question or search query in natural language")] string query,
-        [Description("User ID to scope the search")] string userId,
-        [Description("Tenant ID to include shared content")] string tenantId,
         [Description("Maximum number of results to return")] int maxResults = 5,
         CancellationToken cancellationToken = default)
     {
-        var userGuid   = Guid.Parse(userId);
-        var tenantGuid = Guid.Parse(tenantId);
+        var userId   = userAccessor.GetCurrentUserId();
+        var tenantId = userAccessor.GetCurrentTenantId();
 
+        // Search logic starts here
         var embedding = await embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
 
+        // 1. Try Vector Search
         var results = await vectorStore.SearchSimilarAsync(
-            embedding, userGuid, tenantGuid, maxResults, 0.7f, true, cancellationToken);
+            embedding, userId, tenantId, maxResults, 0.35f, true, cancellationToken);
 
-        if (!results.Any())
-            return "No relevant knowledge found for this query.";
+        var searchLines = new List<string>();
 
-        var lines = results.Select((r, i) =>
-            $"{i + 1}. [{r.Score:F2}] {r.ChunkText}");
+        if (results.Any())
+        {
+            searchLines.AddRange(results.Select((r, i) =>
+                $"{i + 1}. [Project Rule: {r.Title}] [Relevance: {r.Score:F2}]\nContext: {r.ChunkText}"));
+        }
 
-        return string.Join("\n\n", lines);
+        // 2. Keyword Fallback (Atomic keywords) - ALWAYS do keywords too to be safe
+        var keywords = query.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 2)
+            .Select(w => w.Trim().ToLowerInvariant())
+            .ToList();
+
+        if (keywords.Count > 0)
+        {
+            // Fetch items for current scope or shared/empty tenant
+            var items = await db.KnowledgeItems
+                .AsNoTracking()
+                .Where(k => k.UserId == userId || k.TenantId == tenantId || k.TenantId == Guid.Empty)
+                .ToListAsync(cancellationToken);
+
+            var matches = items
+                .Where(k => keywords.Any(kw => 
+                    k.Title.Contains(kw, StringComparison.OrdinalIgnoreCase) || 
+                    k.OriginalContent.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            foreach (var m in matches)
+            {
+                if (!searchLines.Any(l => l.Contains(m.Title)))
+                {
+                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {m.OriginalContent}");
+                }
+            }
+        }
+
+        if (!searchLines.Any())
+        {
+            logger.LogWarning("DATABASE SEARCH | Result: NOTHING FOUND for query '{Query}'", query);
+            return "No relevant project documentation found. Remind the user to document these rules.";
+        }
+
+        logger.LogInformation("DATABASE SEARCH | Result: FOUND {Count} items.", searchLines.Count);
+        return "I found the following PROJECT RULES. YOU MUST FOLLOW THESE IN YOUR RESPONSE:\n\n" +
+               string.Join("\n\n", searchLines);
     }
 }

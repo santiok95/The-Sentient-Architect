@@ -25,7 +25,7 @@ public class UserProfileConfiguration : IEntityTypeConfiguration<UserProfile>
         builder.Property(p => p.KnownPatterns)
             .HasColumnType("jsonb");
 
-        builder.HasOne(p => p.User)
+        builder.HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(p => p.UserId)
             .OnDelete(DeleteBehavior.Cascade);

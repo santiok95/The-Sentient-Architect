@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignalR Tester — Sentient Architect</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            line-height: 1.5;
+            background: #121212;
+            color: #e0e0e0;
+        }
+
+        .card {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            margin-bottom: 20px;
+        }
+
+        input,
+        select,
+        button {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #0078d4;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #0086f1;
+        }
+
+        #log {
+            font-family: monospace;
+            background: black;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            white-space: pre-wrap;
+            border: 1px solid #444;
+        }
+
+        .token {
+            color: #4caf50;
+        }
+
+        .info {
+            color: #2196f3;
+        }
+
+        .error {
+            color: #f44336;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>SignalR Tester 🚀</h1>
+
+    <div class="card">
+        <h3>1. Configuración</h3>
+        <label>Base URL (e.g., http://localhost:5291)</label>
+        <input type="text" id="baseUrl" value="http://localhost:5291">
+
+        <label>JWT Token (de /api/v1/auth/login)</label>
+        <input type="text" id="token" placeholder="Pega el JWT aquí">
+
+        <label>Hub</label>
+        <select id="hubPath">
+            <option value="/hubs/conversation">Conversaciones (/hubs/conversation)</option>
+            <option value="/hubs/analysis">Análisis (/hubs/analysis)</option>
+        </select>
+
+        <button id="connectBtn">Conectar</button>
+    </div>
+
+    <div class="card">
+        <h3>2. Sala/Grupo</h3>
+        <label>ID (Conversation ID o Repository ID)</label>
+        <input type="text" id="groupId" placeholder="Coplas el GUID de la respuesta de Scalar">
+
+        <select id="joinMethod">
+            <option value="JoinConversation">JoinConversation (Conversations Hub)</option>
+            <option value="JoinRepository">JoinRepository (Analysis Hub)</option>
+        </select>
+
+        <button id="joinBtn">Unirse al Grupo</button>
+    </div>
+
+    <div class="card">
+        <h3>3. Eventos en vivo</h3>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let connection = null;
+        const logEl = document.getElementById('log');
+
+        function log(message, type = 'info') {
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n`;
+            logEl.appendChild(span);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        document.getElementById('connectBtn').onclick = async () => {
+            const baseUrl = document.getElementById('baseUrl').value;
+            let token = document.getElementById('token').value.trim();
+            const hubPath = document.getElementById('hubPath').value;
+
+            // Limpieza del token por si pegan el "Bearer "
+            if (token.startsWith('Bearer ')) {
+                token = token.substring(7);
+            }
+
+            if (!token) return alert('Pegá un JWT primero, fiera.');
+
+            if (connection) {
+                await connection.stop();
+                log('Desconectado del anterior.');
+            }
+
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl(`${baseUrl}${hubPath}`, {
+                    accessTokenFactory: () => token
+                })
+                .withAutomaticReconnect()
+                .build();
+
+            // Listeners Generales
+            connection.on('ReceiveToken', (token) => {
+                const messageSpan = logEl.lastElementChild;
+                if (messageSpan && messageSpan.className === 'token') {
+                    messageSpan.textContent += token;
+                } else {
+                    log(token, 'token');
+                }
+            });
+
+            connection.on('ReceiveComplete', () => {
+                log('\n✅ Respuesta completada.', 'info');
+            });
+
+            connection.on('ReceiveProgress', (percent, status) => {
+                log(`⏳ Progreso: ${percent}% - ${status}`, 'info');
+            });
+
+            connection.on('ReceiveError', (err) => {
+                log(`❌ Error: ${err}`, 'error');
+            });
+
+            try {
+                await connection.start();
+                log(`Conectado a ${hubPath}`, 'info');
+            } catch (err) {
+                log(`Fallo al conectar: ${err}`, 'error');
+            }
+        };
+
+        document.getElementById('joinBtn').onclick = async () => {
+            const groupId = document.getElementById('groupId').value;
+            const joinMethod = document.getElementById('joinMethod').value;
+
+            if (!connection || connection.state !== 'Connected') {
+                return alert('Primero tenés que conectar el Hub, loco.');
+            }
+
+            try {
+                await connection.invoke(joinMethod, groupId);
+                log(`Unido al grupo: ${groupId}`, 'info');
+            } catch (err) {
+                log(`Error al unirse: ${err}`, 'error');
+            }
+        };
+    </script>
+</body>
+
+</html>

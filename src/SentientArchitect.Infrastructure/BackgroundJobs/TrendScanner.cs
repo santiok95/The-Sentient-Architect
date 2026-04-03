@@ -1,7 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Xml;
+using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 #pragma warning disable SKEXP0001
 using Microsoft.SemanticKernel.ChatCompletion;
 #pragma warning restore SKEXP0001
@@ -17,9 +20,45 @@ public sealed class TrendScanner(
     IChatCompletionService? chatService,
     ILogger<TrendScanner> logger) : ITrendScanner
 {
+    // ── Source URLs ──────────────────────────────────────────────────────────
+
     private const string GitHubTrendingUrl = "https://github.com/trending";
     private const string HnTopStoriesUrl   = "https://hacker-news.firebaseio.com/v0/topstories.json";
     private const string HnItemUrl         = "https://hacker-news.firebaseio.com/v0/item/{0}.json";
+
+    // Dev.to public API — no key required
+    private const string DevToApiUrl = "https://dev.to/api/articles?per_page=20&tag={0}";
+
+    // Medium RSS feeds by tag
+    private static readonly string[] MediumTags =
+    [
+        "software-architecture",
+        "dotnet",
+        "artificial-intelligence",
+        "devops",
+        "microservices"
+    ];
+
+    // GitHub Releases for key repos (owner/repo)
+    private static readonly string[] WatchedRepos =
+    [
+        "dotnet/aspnetcore",
+        "dotnet/runtime",
+        "microsoft/semantic-kernel",
+        "dotnet/efcore",
+        "dotnet/aspire",
+        "microsoft/garnet",
+        "openai/openai-dotnet"
+    ];
+
+    private static readonly string[] DevToTags =
+    [
+        "dotnet",
+        "csharp",
+        "architecture",
+        "ai",
+        "devops"
+    ];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -27,71 +66,87 @@ public sealed class TrendScanner(
         Converters = { new JsonStringEnumConverter() }
     };
 
+    // ── Entry point ──────────────────────────────────────────────────────────
+
     public async Task ScanAsync(CancellationToken ct = default)
     {
         if (chatService is null)
         {
-            logger.LogWarning("IChatCompletionService is not registered (no API key configured). Skipping trend scan.");
+            logger.LogWarning("IChatCompletionService not registered. Skipping trend scan.");
             return;
         }
 
-        var signals = new List<string>();
+        var signals = new List<FeedSignal>();
 
-        var githubRepos = await FetchGitHubTrendingAsync(ct);
-        signals.AddRange(githubRepos);
-        logger.LogInformation("Fetched {Count} GitHub trending repos.", githubRepos.Count);
+        // Collect from all sources in parallel
+        var tasks = new[]
+        {
+            FetchGitHubTrendingAsync(ct),
+            FetchHackerNewsAsync(ct),
+            FetchDevToAsync(ct),
+            FetchMediumRssAsync(ct),
+            FetchGitHubReleasesAsync(ct),
+        };
 
-        var hnTitles = await FetchHackerNewsTitlesAsync(ct);
-        signals.AddRange(hnTitles);
-        logger.LogInformation("Fetched {Count} Hacker News story titles.", hnTitles.Count);
+        var results = await Task.WhenAll(tasks);
+        foreach (var batch in results)
+            signals.AddRange(batch);
+
+        logger.LogInformation("Collected {Count} signals from all sources.", signals.Count);
 
         if (signals.Count == 0)
         {
-            logger.LogWarning("No signals collected from sources. Skipping LLM analysis.");
+            logger.LogWarning("No signals collected. Skipping LLM analysis.");
             return;
         }
 
-        var trendItems = await AnalyzeWithLlmAsync(signals, ct);
+        // Load user profiles for relevance context
+        var profileContext = await BuildProfileContextAsync(ct);
+
+        var trendItems = await AnalyzeWithLlmAsync(signals, profileContext, ct);
+
         if (trendItems.Count == 0)
         {
-            logger.LogWarning("LLM returned no trend items. Nothing to upsert.");
+            logger.LogWarning("LLM returned no trend items.");
             return;
         }
 
         await UpsertTrendsAsync(trendItems, ct);
     }
 
-    // ── GitHub Trending ─────────────────────────────────────────────────────
+    // ── GitHub Trending ──────────────────────────────────────────────────────
 
-    private async Task<List<string>> FetchGitHubTrendingAsync(CancellationToken ct)
+    private async Task<List<FeedSignal>> FetchGitHubTrendingAsync(CancellationToken ct)
     {
         try
         {
             using var client = httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; SentientArchitect/1.0)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
 
-            var html = await client.GetStringAsync(GitHubTrendingUrl, ct);
-            return ParseGitHubRepoNames(html);
+            var html  = await client.GetStringAsync(GitHubTrendingUrl, ct);
+            var repos = ParseGitHubRepoNames(html);
+
+            logger.LogInformation("GitHub Trending: {Count} repos.", repos.Count);
+            return repos.Select(r => new FeedSignal(r, "https://github.com/trending", SignalSource.GitHubTrending)).ToList();
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to fetch GitHub Trending. Skipping source.");
+            logger.LogWarning(ex, "GitHub Trending fetch failed.");
             return [];
         }
     }
 
     private static List<string> ParseGitHubRepoNames(string html)
     {
-        var results = new List<string>();
+        var results   = new List<string>();
         var searchTag = "<h2 class=\"h3 lh-condensed\">";
-        var pos = 0;
+        var pos       = 0;
 
-        while (results.Count < 20)
+        while (results.Count < 25)
         {
             var tagStart = html.IndexOf(searchTag, pos, StringComparison.Ordinal);
             if (tagStart < 0) break;
 
-            // Find the first <a href="..."> inside the h2
             var hrefStart = html.IndexOf("<a ", tagStart, StringComparison.Ordinal);
             if (hrefStart < 0) break;
 
@@ -102,12 +157,10 @@ public sealed class TrendScanner(
             if (endTag < 0) break;
 
             var repoName = html[(closeTag + 1)..endTag]
-                .Replace("\n", "")
-                .Replace(" ", "")
-                .Trim();
+                .Replace("\n", "").Replace(" ", "").Trim();
 
             if (!string.IsNullOrWhiteSpace(repoName))
-                results.Add($"GitHub Trending: {repoName}");
+                results.Add(repoName);
 
             pos = endTag;
         }
@@ -115,9 +168,9 @@ public sealed class TrendScanner(
         return results;
     }
 
-    // ── Hacker News ─────────────────────────────────────────────────────────
+    // ── Hacker News ──────────────────────────────────────────────────────────
 
-    private async Task<List<string>> FetchHackerNewsTitlesAsync(CancellationToken ct)
+    private async Task<List<FeedSignal>> FetchHackerNewsAsync(CancellationToken ct)
     {
         try
         {
@@ -125,13 +178,12 @@ public sealed class TrendScanner(
             client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
 
             var idsJson = await client.GetStringAsync(HnTopStoriesUrl, ct);
-            var ids = JsonSerializer.Deserialize<int[]>(idsJson);
+            var ids     = JsonSerializer.Deserialize<int[]>(idsJson);
             if (ids is null || ids.Length == 0) return [];
 
-            var titles = new List<string>();
-            var top10 = ids.Take(10);
+            var signals = new List<FeedSignal>();
 
-            await Parallel.ForEachAsync(top10, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (id, innerCt) =>
+            await Parallel.ForEachAsync(ids.Take(15), new ParallelOptions { MaxDegreeOfParallelism = 5, CancellationToken = ct }, async (id, innerCt) =>
             {
                 try
                 {
@@ -140,55 +192,274 @@ public sealed class TrendScanner(
                     if (doc.RootElement.TryGetProperty("title", out var titleEl))
                     {
                         var title = titleEl.GetString();
+                        var url   = doc.RootElement.TryGetProperty("url", out var urlEl) ? urlEl.GetString() : null;
                         if (!string.IsNullOrWhiteSpace(title))
                         {
-                            lock (titles) titles.Add($"Hacker News: {title}");
+                            lock (signals)
+                                signals.Add(new FeedSignal(title, url ?? "https://news.ycombinator.com", SignalSource.HackerNews));
                         }
                     }
                 }
-                catch
-                {
-                    // swallow per-item failures
-                }
+                catch { /* swallow per-item errors */ }
             });
 
-            return titles;
+            logger.LogInformation("Hacker News: {Count} stories.", signals.Count);
+            return signals;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to fetch Hacker News stories. Skipping source.");
+            logger.LogWarning(ex, "Hacker News fetch failed.");
             return [];
         }
     }
 
-    // ── LLM Analysis ────────────────────────────────────────────────────────
+    // ── Dev.to API ───────────────────────────────────────────────────────────
 
-    private async Task<List<TrendItem>> AnalyzeWithLlmAsync(List<string> signals, CancellationToken ct)
+    private async Task<List<FeedSignal>> FetchDevToAsync(CancellationToken ct)
     {
-        var signalBlock = string.Join("\n", signals);
+        var signals = new List<FeedSignal>();
+
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+
+            foreach (var tag in DevToTags)
+            {
+                if (ct.IsCancellationRequested) break;
+
+                try
+                {
+                    var url  = string.Format(DevToApiUrl, tag);
+                    var json = await client.GetStringAsync(url, ct);
+
+                    using var doc = JsonDocument.Parse(json);
+                    foreach (var article in doc.RootElement.EnumerateArray().Take(5))
+                    {
+                        var title    = article.TryGetProperty("title", out var t) ? t.GetString() : null;
+                        var articleUrl = article.TryGetProperty("url", out var u) ? u.GetString() : null;
+                        var description = article.TryGetProperty("description", out var d) ? d.GetString() : null;
+
+                        if (string.IsNullOrWhiteSpace(title)) continue;
+
+                        var text = string.IsNullOrWhiteSpace(description) ? title : $"{title} — {description}";
+                        signals.Add(new FeedSignal(text, articleUrl ?? "https://dev.to", SignalSource.DevTo));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Dev.to fetch failed for tag '{Tag}'.", tag);
+                }
+            }
+
+            logger.LogInformation("Dev.to: {Count} articles.", signals.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Dev.to overall fetch failed.");
+        }
+
+        return signals;
+    }
+
+    // ── Medium RSS ───────────────────────────────────────────────────────────
+
+    private async Task<List<FeedSignal>> FetchMediumRssAsync(CancellationToken ct)
+    {
+        var signals = new List<FeedSignal>();
+
+        foreach (var tag in MediumTags)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            try
+            {
+                var url = $"https://medium.com/feed/tag/{tag}";
+                using var client = httpClientFactory.CreateClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
+
+                var xml      = await client.GetStringAsync(url, ct);
+                var tagItems = ParseRssFeed(xml, "https://medium.com", SignalSource.MediumRss, maxItems: 5);
+                signals.AddRange(tagItems);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Medium RSS fetch failed for tag '{Tag}'.", tag);
+            }
+        }
+
+        logger.LogInformation("Medium RSS: {Count} articles.", signals.Count);
+        return signals;
+    }
+
+    private static List<FeedSignal> ParseRssFeed(string xml, string fallbackUrl, SignalSource source, int maxItems = 10)
+    {
+        var signals = new List<FeedSignal>();
+
+        try
+        {
+            var doc = XDocument.Parse(xml);
+
+            // Atom feeds use the atom namespace; RSS uses no namespace
+            XNamespace atom = "http://www.w3.org/2005/Atom";
+
+            // Try Atom first (GitHub Releases uses Atom)
+            var atomEntries = doc.Descendants(atom + "entry").Take(maxItems).ToList();
+            if (atomEntries.Count > 0)
+            {
+                foreach (var entry in atomEntries)
+                {
+                    var title = entry.Element(atom + "title")?.Value?.Trim();
+                    if (string.IsNullOrWhiteSpace(title)) continue;
+
+                    var link    = entry.Elements(atom + "link")
+                                       .FirstOrDefault(e => e.Attribute("rel")?.Value != "alternate" || true)
+                                       ?.Attribute("href")?.Value ?? fallbackUrl;
+                    var summary = entry.Element(atom + "summary")?.Value
+                               ?? entry.Element(atom + "content")?.Value ?? string.Empty;
+
+                    summary = StripHtml(summary);
+
+                    var text = string.IsNullOrWhiteSpace(summary)
+                        ? title
+                        : $"{title} — {summary[..Math.Min(200, summary.Length)]}";
+
+                    signals.Add(new FeedSignal(text, link, source));
+                }
+                return signals;
+            }
+
+            // Fall back to RSS 2.0
+            var rssItems = doc.Descendants("item").Take(maxItems).ToList();
+            foreach (var item in rssItems)
+            {
+                var title = item.Element("title")?.Value?.Trim();
+                if (string.IsNullOrWhiteSpace(title)) continue;
+
+                var link    = item.Element("link")?.Value?.Trim() ?? fallbackUrl;
+                var summary = item.Element("description")?.Value ?? string.Empty;
+                summary     = StripHtml(summary);
+
+                var text = string.IsNullOrWhiteSpace(summary)
+                    ? title
+                    : $"{title} — {summary[..Math.Min(200, summary.Length)]}";
+
+                signals.Add(new FeedSignal(text, link, source));
+            }
+        }
+        catch
+        {
+            // Malformed XML — skip
+        }
+
+        return signals;
+    }
+
+    private static string StripHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        return System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", " ").Trim();
+    }
+
+    // ── GitHub Releases ──────────────────────────────────────────────────────
+
+    private async Task<List<FeedSignal>> FetchGitHubReleasesAsync(CancellationToken ct)
+    {
+        var signals = new List<FeedSignal>();
+
+        foreach (var repo in WatchedRepos)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            try
+            {
+                var url = $"https://github.com/{repo}/releases.atom";
+                using var client = httpClientFactory.CreateClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
+
+                var xml   = await client.GetStringAsync(url, ct);
+                var items = ParseRssFeed(xml, $"https://github.com/{repo}/releases", SignalSource.GitHubReleases, maxItems: 3);
+
+                // Prefix with repo name for LLM context
+                foreach (var s in items)
+                    signals.Add(s with { Text = $"[{repo}] {s.Text}" });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "GitHub Releases fetch failed for '{Repo}'.", repo);
+            }
+        }
+
+        logger.LogInformation("GitHub Releases: {Count} entries.", signals.Count);
+        return signals;
+    }
+
+    // ── Profile context ──────────────────────────────────────────────────────
+
+    private async Task<string> BuildProfileContextAsync(CancellationToken ct)
+    {
+        try
+        {
+            var profiles = await db.UserProfiles
+                .AsNoTracking()
+                .ToListAsync(ct);
+
+            if (profiles.Count == 0) return string.Empty;
+
+            // Aggregate the most common stacks and patterns across all users
+            var allStacks = profiles
+                .SelectMany(p => p.PreferredStack)
+                .GroupBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Count())
+                .Take(15)
+                .Select(g => g.Key);
+
+            var allPatterns = profiles
+                .SelectMany(p => p.KnownPatterns)
+                .GroupBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Count())
+                .Take(10)
+                .Select(g => g.Key);
+
+            return $"User community stack: {string.Join(", ", allStacks)}. " +
+                   $"Known patterns: {string.Join(", ", allPatterns)}.";
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // ── LLM Analysis ─────────────────────────────────────────────────────────
+
+    private async Task<List<TrendItem>> AnalyzeWithLlmAsync(
+        List<FeedSignal> signals, string profileContext, CancellationToken ct)
+    {
+        var signalBlock = string.Join("\n", signals.Select(s => $"[{s.Source}] {s.Text}"));
+
+        var profileSection = string.IsNullOrWhiteSpace(profileContext)
+            ? ""
+            : $"\n\nUser community context (use this to prioritize relevance): {profileContext}";
+
         var prompt =
-            "You are a technology trend analyst. Analyze the following signals collected from GitHub Trending and Hacker News today.\n" +
-            "Identify up to 10 distinct technology trends visible in this data.\n\n" +
+            "You are a technology trend analyst for a developer knowledge platform.\n" +
+            "Analyze the following signals collected from GitHub Trending, Hacker News, Dev.to, Medium, and GitHub Releases.\n" +
+            "Identify up to 12 distinct technology trends visible in this data." +
+            profileSection + "\n\n" +
             "For each trend, provide:\n" +
             "- name: the technology, tool, language, framework, or pattern name\n" +
             "- category: one of Framework, Language, Tool, Pattern, Platform, Library\n" +
             "- direction: one of Rising, Stable, Declining\n" +
-            "- score: relevance score from 0.0 to 1.0 (higher = more prominent in the signals)\n" +
-            "- description: 1-2 sentence description of why this is trending\n" +
-            "- sources: list of source URLs that contributed to this signal (use \"https://github.com/trending\" or \"https://news.ycombinator.com\")\n\n" +
-            "Return ONLY a raw JSON array with no markdown, no code blocks, no explanation. Example:\n" +
+            "- score: relevance score 0.0–1.0 (boost score if relevant to the user community context above)\n" +
+            "- description: 1-2 sentences on why this is trending and why it matters to developers\n" +
+            "- sources: URLs from the signals that contributed to this trend\n\n" +
+            "Return ONLY a raw JSON array, no markdown, no code blocks:\n" +
             "[\n" +
-            "  {\n" +
-            "    \"name\": \"Rust\",\n" +
-            "    \"category\": \"Language\",\n" +
-            "    \"direction\": \"Rising\",\n" +
-            "    \"score\": 0.85,\n" +
-            "    \"description\": \"Rust continues to gain adoption in systems programming and WebAssembly.\",\n" +
-            "    \"sources\": [\"https://github.com/trending\"]\n" +
-            "  }\n" +
+            "  {\"name\":\"Rust\",\"category\":\"Language\",\"direction\":\"Rising\",\"score\":0.85," +
+            "\"description\":\"Trending for systems and WASM.\",\"sources\":[\"https://github.com/trending\"]}\n" +
             "]\n\n" +
-            "Signals:\n" +
-            signalBlock;
+            "Signals:\n" + signalBlock;
 
         try
         {
@@ -196,10 +467,8 @@ public sealed class TrendScanner(
             history.AddUserMessage(prompt);
 
             var response = await chatService!.GetChatMessageContentAsync(history, cancellationToken: ct);
-            var json = response.Content ?? "[]";
-            json = json.Trim();
+            var json     = (response.Content ?? "[]").Trim();
 
-            // Strip markdown code blocks if the LLM wrapped the response anyway
             if (json.StartsWith("```", StringComparison.Ordinal))
             {
                 var firstNewline = json.IndexOf('\n');
@@ -208,12 +477,11 @@ public sealed class TrendScanner(
                     json = json[(firstNewline + 1)..lastFence].Trim();
             }
 
-            var items = JsonSerializer.Deserialize<List<TrendItem>>(json, JsonOptions);
-            return items ?? [];
+            return JsonSerializer.Deserialize<List<TrendItem>>(json, JsonOptions) ?? [];
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "LLM analysis failed. Returning empty trend list.");
+            logger.LogError(ex, "LLM analysis failed.");
             return [];
         }
     }
@@ -238,13 +506,11 @@ public sealed class TrendScanner(
             {
                 trend = new TechnologyTrend(item.Name, item.Category);
                 db.TechnologyTrends.Add(trend);
-                logger.LogInformation("Creating new trend: {Name} ({Category}).", item.Name, item.Category);
+                logger.LogInformation("New trend: {Name} ({Category}).", item.Name, item.Category);
             }
             else
             {
-                // Re-attach so EF tracks changes
-                trend = await db.TechnologyTrends.FindAsync([existing.Id], ct)
-                    ?? existing;
+                trend = await db.TechnologyTrends.FindAsync([existing.Id], ct) ?? existing;
             }
 
             trend.UpdateRelevance(item.Score, item.Direction, item.Description);
@@ -252,16 +518,33 @@ public sealed class TrendScanner(
             foreach (var source in item.Sources)
                 trend.AddSource(source);
 
-            var snapshot = new TrendSnapshot(trend.Id, item.Score, item.Direction, today, item.Description);
-            trend.RecordSnapshot(snapshot);
-            db.TrendSnapshots.Add(snapshot);
+            var snapshotExists = await db.TrendSnapshots
+                .AnyAsync(s => s.TechnologyTrendId == trend.Id && s.Date == today, ct);
+
+            if (!snapshotExists)
+            {
+                var snapshot = new TrendSnapshot(trend.Id, item.Score, item.Direction, today, item.Description);
+                trend.RecordSnapshot(snapshot);
+                db.TrendSnapshots.Add(snapshot);
+            }
         }
 
         var saved = await db.SaveChangesAsync(ct);
-        logger.LogInformation("Upserted {Count} trends, saved {Changes} changes.", items.Count, saved);
+        logger.LogInformation("Upserted {Count} trends, {Changes} DB changes.", items.Count, saved);
     }
 
-    // ── DTO ──────────────────────────────────────────────────────────────────
+    // ── DTOs ──────────────────────────────────────────────────────────────────
+
+    private enum SignalSource
+    {
+        GitHubTrending,
+        HackerNews,
+        DevTo,
+        MediumRss,
+        GitHubReleases
+    }
+
+    private record FeedSignal(string Text, string Url, SignalSource Source);
 
     private sealed class TrendItem
     {

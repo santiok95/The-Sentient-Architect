@@ -5,6 +5,7 @@ namespace SentientArchitect.Application.Common.Models;
 /// </summary>
 public record VectorSearchResult(
     Guid KnowledgeItemId,
+    string Title,
     int ChunkIndex,
     string ChunkText,
     float Score);

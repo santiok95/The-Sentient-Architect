@@ -91,6 +91,7 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
             .Take(topK)
             .Select(x => new VectorSearchResult(
                 x.Embedding.KnowledgeItemId,
+                x.Embedding.KnowledgeItem?.Title ?? "Untitled",
                 x.Embedding.ChunkIndex,
                 x.Embedding.ChunkText,
                 x.Score))

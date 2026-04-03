@@ -21,8 +21,6 @@ public class UserProfile : BaseEntity
     public string? CustomNotes { get; private set; }
     public DateTime LastUpdatedAt { get; private set; }
 
-    public User? User { get; private set; }
-
     public void UpdatePreferredStack(List<string> stack)
     {
         PreferredStack = stack;

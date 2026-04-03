@@ -7,7 +7,7 @@ namespace SentientArchitect.Application.Features.Profile.UpdateProfile;
 
 public class UpdateProfileUseCase(IApplicationDbContext db)
 {
-    public async Task<Result> ExecuteAsync(
+    public async Task<Result<UpdateProfileResponse>> ExecuteAsync(
         UpdateProfileRequest request,
         CancellationToken ct = default)
     {
@@ -42,6 +42,16 @@ public class UpdateProfileUseCase(IApplicationDbContext db)
 
         await db.SaveChangesAsync(ct);
 
-        return Result.Success;
+        var response = new UpdateProfileResponse(
+            profile.UserId,
+            profile.PreferredStack,
+            profile.KnownPatterns,
+            profile.InfrastructureContext,
+            profile.TeamSize,
+            profile.ExperienceLevel,
+            profile.CustomNotes,
+            profile.LastUpdatedAt);
+
+        return Result<UpdateProfileResponse>.SuccessWith(response);
     }
 }
