@@ -7,7 +7,7 @@ using SentientArchitect.Infrastructure.Agents.Knowledge;
 
 namespace SentientArchitect.Infrastructure.Agents;
 
-public sealed class ConsultantAgentFactory(IChatCompletionService chatService)
+public sealed class ConsultantAgentFactory
 {
     private const string Instructions = """
         You are the Architecture Consultant for The Sentient Architect.
@@ -29,6 +29,7 @@ public sealed class ConsultantAgentFactory(IChatCompletionService chatService)
         """;
 
     public ChatCompletionAgent Create(
+        IChatCompletionService chatService,
         ProfilePlugin profilePlugin,
         SummaryPlugin summaryPlugin,
         SearchPlugin searchPlugin)

@@ -18,6 +18,7 @@ public static class DataPostgresServiceExtensions
 
         var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
         dataSourceBuilder.UseVector();
+        dataSourceBuilder.EnableDynamicJson();
         var dataSource = dataSourceBuilder.Build();
 
         services.AddDbContext<ApplicationContext>(options =>

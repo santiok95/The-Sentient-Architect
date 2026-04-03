@@ -6,7 +6,7 @@ using SentientArchitect.Infrastructure.Agents.Knowledge;
 
 namespace SentientArchitect.Infrastructure.Agents;
 
-public sealed class KnowledgeAgentFactory(IChatCompletionService chatService)
+public sealed class KnowledgeAgentFactory
 {
     private const string Instructions = """
         You are the Knowledge Agent for The Sentient Architect.
@@ -24,7 +24,10 @@ public sealed class KnowledgeAgentFactory(IChatCompletionService chatService)
         - If nothing relevant is found, say so honestly
         """;
 
-    public ChatCompletionAgent Create(SearchPlugin searchPlugin, IngestPlugin ingestPlugin)
+    public ChatCompletionAgent Create(
+        IChatCompletionService chatService,
+        SearchPlugin searchPlugin,
+        IngestPlugin ingestPlugin)
     {
         var builder = Kernel.CreateBuilder();
         builder.Services.AddSingleton(chatService);

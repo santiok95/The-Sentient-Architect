@@ -56,7 +56,7 @@ public class Result<TData> : Result
     public static Result<TData> SuccessWith(TData data)
         => new(true, ErrorType.Validation, data, []);
 
-    public static Result<TData> Failure(IEnumerable<string> errors, ErrorType type = ErrorType.Validation)
+    public new static Result<TData> Failure(IEnumerable<string> errors, ErrorType type = ErrorType.Validation)
         => new(false, type, default, errors.ToList());
 
     public static implicit operator Result<TData>(List<string> errors)

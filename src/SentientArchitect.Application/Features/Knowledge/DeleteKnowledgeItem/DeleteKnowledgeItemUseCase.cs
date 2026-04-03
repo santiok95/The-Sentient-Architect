@@ -1,6 +1,5 @@
 using SentientArchitect.Application.Common.Interfaces;
-using SentientArchitect.Application.Common.Results;
-using MediatR; 
+using SentientArchitect.Application.Common.Results; 
 
 namespace SentientArchitect.Application.Features.Knowledge.DeleteKnowledgeItem;
 

@@ -38,8 +38,8 @@ public class ChatEndpoints : IEndpointModule
 
             // Save the user message and get context
             var result = await saveMessageUseCase.ExecuteAsync(new SaveMessageRequest(conversationId, userId, body.Message, MessageRole.User), ct);
-            
-            if (!result.IsSuccess)
+
+            if (!result.Succeeded)
                 return Results.NotFound(result.Errors);
 
             var history = new ChatHistory();
@@ -55,9 +55,12 @@ public class ChatEndpoints : IEndpointModule
                 history.Add(new ChatMessageContent(role, msg.Content));
             }
 
-            var services = httpContext.RequestServices;
+            var services  = httpContext.RequestServices;
             var groupName = conversationId.ToString();
             var fullResponse = new System.Text.StringBuilder();
+
+            // Resolve chatService per-request (registered as Singleton but safe to resolve here)
+            var chatService = services.GetRequiredService<IChatCompletionService>();
 
             try
             {
@@ -66,7 +69,7 @@ public class ChatEndpoints : IEndpointModule
                     var profilePlugin = services.GetRequiredService<ProfilePlugin>();
                     var summaryPlugin = services.GetRequiredService<SummaryPlugin>();
                     var searchPlugin  = services.GetRequiredService<SearchPlugin>();
-                    var agent = consultantFactory.Create(profilePlugin, summaryPlugin, searchPlugin);
+                    var agent = consultantFactory.Create(chatService, profilePlugin, summaryPlugin, searchPlugin);
 
                     await foreach (var chunk in agent.InvokeStreamingAsync(history, cancellationToken: ct))
                     {
@@ -81,7 +84,7 @@ public class ChatEndpoints : IEndpointModule
                 {
                     var searchPlugin = services.GetRequiredService<SearchPlugin>();
                     var ingestPlugin = services.GetRequiredService<IngestPlugin>();
-                    var agent = knowledgeFactory.Create(searchPlugin, ingestPlugin);
+                    var agent = knowledgeFactory.Create(chatService, searchPlugin, ingestPlugin);
 
                     await foreach (var chunk in agent.InvokeStreamingAsync(history, cancellationToken: ct))
                     {

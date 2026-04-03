@@ -5,4 +5,6 @@
   <Project Path="SentientArchitect.Data/SentientArchitect.Data.csproj" />
   <Project Path="SentientArchitect.Domain/SentientArchitect.Domain.csproj" />
   <Project Path="SentientArchitect.Infrastructure/SentientArchitect.Infrastructure.csproj" />
+  <Project Path="../tests/SentientArchitect.UnitTests/SentientArchitect.UnitTests.csproj" />
+  <Project Path="../tests/SentientArchitect.IntegrationTests/SentientArchitect.IntegrationTests.csproj" />
 </Solution>

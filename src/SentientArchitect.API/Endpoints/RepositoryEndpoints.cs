@@ -7,6 +7,7 @@ using SentientArchitect.Application.Features.Repositories.GetRepositories;
 using SentientArchitect.Application.Features.Repositories.GetRepositoryReports;
 using SentientArchitect.Application.Features.Repositories.SubmitRepository;
 using SentientArchitect.Domain.Enums;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -68,6 +69,27 @@ public class RepositoryEndpoints : IEndpointModule
         })
         .WithName("GetAnalysisReport")
         .WithOpenApi();
+
+        group.MapPost("/{id:guid}/analyze", TriggerAnalysisAsync)
+            .WithName("TriggerAnalysis")
+            .WithOpenApi();
+    }
+
+    private static IResult TriggerAnalysisAsync(
+        Guid id,
+        IServiceScopeFactory scopeFactory)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var analyzer = scope.ServiceProvider.GetRequiredService<ICodeAnalyzer>();
+                await analyzer.AnalyzeAsync(id);
+            }
+            catch { /* analysis errors are handled inside AnalyzeAsync */ }
+        });
+        return Results.Accepted($"/api/v1/repositories/{id}/reports");
     }
 
     private record SubmitRepositoryHttpRequest(string RepositoryUrl, RepositoryTrust Trust);

@@ -22,6 +22,7 @@ using SentientArchitect.Infrastructure.Agents;
 using SentientArchitect.Infrastructure.Agents.Consultant;
 using SentientArchitect.Infrastructure.Agents.Knowledge;
 using SentientArchitect.Infrastructure.BackgroundJobs;
+using SentientArchitect.Infrastructure.Guardian;
 using SentientArchitect.Infrastructure.Identity;
 
 namespace SentientArchitect.Infrastructure;
@@ -88,9 +89,10 @@ public static class InfrastructureServiceExtensions
                 .UseFunctionInvocation()
                 .Build();
 
+            var chatModel = configuration["AI:Anthropic:ChatModel"] ?? "claude-haiku-4-5-20251001";
+
 #pragma warning disable SKEXP0001
-            services.AddSingleton<IChatCompletionService>(
-                chatClient.AsChatCompletionService());
+            services.AddSingleton<IChatCompletionService>(new ChatClientWrapper(chatClient, chatModel));
 #pragma warning restore SKEXP0001
         }
 
@@ -133,6 +135,9 @@ public static class InfrastructureServiceExtensions
             sp.GetService<IChatCompletionService>(),
             sp.GetRequiredService<ILogger<TrendScanner>>()));
         services.AddHostedService<TrendScannerService>();
+
+        // ── Code Guardian ─────────────────────────────────────────────────────────
+        services.AddScoped<ICodeAnalyzer, CodeAnalyzer>();
 
         return services;
     }

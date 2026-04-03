@@ -1,18 +1,39 @@
 using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Hubs;
 using SentientArchitect.API.Middleware;
+using SentientArchitect.API.Services;
 using SentientArchitect.Application;
+using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Data.Postgres;
 using SentientArchitect.Infrastructure;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((doc, _, _) =>
+    {
+        doc.Components ??= new();
+        doc.Components.SecuritySchemes["Bearer"] = new()
+        {
+            Type     = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme   = "bearer",
+            BearerFormat = "JWT",
+            Description  = "Paste your JWT token here (without 'Bearer ' prefix)",
+        };
+        doc.SecurityRequirements.Add(new()
+        {
+            [new() { Reference = new() { Id = "Bearer", Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme } }] = []
+        });
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddSignalR();
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
+builder.Services.AddScoped<IAnalysisProgressReporter, AnalysisProgressReporter>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
