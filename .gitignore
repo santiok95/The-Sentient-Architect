@@ -49,8 +49,8 @@ coverage/
 # Project specific
 temp-repos/          # Temp directory for cloned repos during analysis
 *.env                # Environment variables (API keys, connection strings)
-appsettings.*.json   # Local settings overrides
-!appsettings.json    # Keep the template
+**/appsettings.*.json   # Local settings overrides
+!**/appsettings.json    # Keep the template
 
 # Logs
 logs/
