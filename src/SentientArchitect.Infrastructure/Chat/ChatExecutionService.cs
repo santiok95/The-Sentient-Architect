@@ -7,6 +7,7 @@ using SentientArchitect.Application.Features.Conversations.Chat;
 using SentientArchitect.Domain.Entities;
 using SentientArchitect.Domain.Enums;
 using SentientArchitect.Infrastructure.Agents;
+using SentientArchitect.Infrastructure.Agents.Consultant;
 using SentientArchitect.Infrastructure.Agents.Knowledge;
 
 namespace SentientArchitect.Infrastructure.Chat;
@@ -16,7 +17,9 @@ public sealed class ChatExecutionService(
     KnowledgeAgentFactory knowledgeFactory,
     ConsultantAgentFactory consultantFactory,
     SearchPlugin searchPlugin,
-    AnthropicOrchestrator anthropicOrchestrator) : IChatExecutionService
+    ProfilePlugin profilePlugin,
+    SummaryPlugin summaryPlugin,
+    IUserAccessor userAccessor) : IChatExecutionService
 {
     private const string KnowledgeSystemPrompt = """
         You are the Knowledge Agent for The Sentient Architect.
@@ -72,18 +75,14 @@ public sealed class ChatExecutionService(
                 return knowledgeResponse;
             }
 
-            var consultantResponse = await anthropicOrchestrator.RunAsync(
+            // Keep consultant stable while Anthropic tool-call protocol through the bridge
+            // is still intermittently failing with tool_use/tool_result mismatches.
+            return await RunDeterministicConsultantFlowAsync(
+                request,
                 chatService,
-                kernel,
                 chatHistory,
                 onToken,
                 ct);
-
-            if (!consultantResponse.Succeeded || consultantResponse.Data is null)
-                return Result<ChatExecutionResponse>.Failure(consultantResponse.Errors, consultantResponse.ErrorType);
-
-            return Result<ChatExecutionResponse>.SuccessWith(
-                new ChatExecutionResponse(consultantResponse.Data, "Consultant"));
         }
         catch (Exception ex)
         {
@@ -144,6 +143,66 @@ public sealed class ChatExecutionService(
 
         return Result<ChatExecutionResponse>.SuccessWith(
             new ChatExecutionResponse(responseBuilder.ToString(), "Knowledge"));
+    }
+
+    private async Task<Result<ChatExecutionResponse>> RunDeterministicConsultantFlowAsync(
+        ChatExecutionRequest request,
+        IChatCompletionService chatService,
+        ChatHistory history,
+        Func<string, CancellationToken, Task>? onToken,
+        CancellationToken ct)
+    {
+        var userId = userAccessor.GetCurrentUserId();
+        var userProfile = await profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
+        var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
+            request.ConversationId.ToString(),
+            ct);
+        var retrievedContext = await searchPlugin.SearchByMeaningAsync(
+            request.Message,
+            maxResults: 8,
+            cancellationToken: ct);
+
+        var responseKernelBuilder = Kernel.CreateBuilder();
+        responseKernelBuilder.Services.AddSingleton(chatService);
+        var responseKernel = responseKernelBuilder.Build();
+
+        var responseHistory = new ChatHistory();
+        foreach (var item in history)
+            responseHistory.Add(item);
+
+        var contextMessage = new ChatMessageContent(
+            AuthorRole.System,
+            "Consultant context (source of truth):\n" +
+            $"- User profile:\n{userProfile}\n\n" +
+            $"- Conversation summary:\n{conversationSummary}\n\n" +
+            $"- Retrieved project knowledge:\n{retrievedContext}\n\n" +
+            "Response policy:\n" +
+            "1. Start with a tailored architecture recommendation based on user profile and team context.\n" +
+            "2. Prioritize retrieved project rules over generic advice.\n" +
+            "3. If a recommendation is generic and not a project rule, label it clearly as 'Alternativa generica'.\n" +
+            "4. Keep practical next steps explicit and concise.");
+
+        if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
+            responseHistory.Insert(1, contextMessage);
+        else
+            responseHistory.Insert(0, contextMessage);
+
+        var responseBuilder = new System.Text.StringBuilder();
+        var noToolSettings = new PromptExecutionSettings();
+
+        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
+        {
+            if (string.IsNullOrEmpty(chunk.Content))
+                continue;
+
+            responseBuilder.Append(chunk.Content);
+
+            if (onToken is not null)
+                await onToken(chunk.Content, ct);
+        }
+
+        return Result<ChatExecutionResponse>.SuccessWith(
+            new ChatExecutionResponse(responseBuilder.ToString(), "Consultant"));
     }
 
     private static ChatHistory BuildChatHistory(IReadOnlyList<ConversationMessage> messages, string systemPrompt)
