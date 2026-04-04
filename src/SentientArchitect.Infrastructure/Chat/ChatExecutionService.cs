@@ -19,6 +19,7 @@ public sealed class ChatExecutionService(
     SearchPlugin searchPlugin,
     ProfilePlugin profilePlugin,
     SummaryPlugin summaryPlugin,
+    RepositoryContextPlugin repositoryContextPlugin,
     IUserAccessor userAccessor) : IChatExecutionService
 {
     private const string KnowledgeSystemPrompt = """
@@ -37,13 +38,25 @@ public sealed class ChatExecutionService(
 
     private const string ConsultantSystemPrompt = """
         You are the Architecture Consultant for The Sentient Architect.
-        Your role is to provide expert software architecture advice tailored to the developer's context.
+        Your role is to provide expert software architecture advice tailored to the developer's
+        existing codebase and professional context.
         You have access to:
         - Profile-GetUserProfile: Get the developer's tech stack and preferences
-        - Summary-GetConversationSummary: Get context from previous conversation
-        - Search-SearchByMeaning: Search the knowledge base for relevant patterns
+        - Summary-GetConversationSummary: Get context from previous conversations
+        - Search-SearchByMeaning: Search the knowledge base for relevant rules
+        - RepositoryContext-GetUserRepositoriesContext: Get the architectural patterns detected
+          in the user's actual analyzed repositories
 
-        ALWAYS start by calling Profile-GetUserProfile to personalize your advice.
+        MANDATORY RULES — never violate these:
+        1. ALWAYS call Profile-GetUserProfile before giving any recommendation.
+        2. ALWAYS check the injected codebase context for established patterns before advising.
+        3. Recommendations MUST be consistent with the patterns already in use in the user's
+           codebase (e.g. if the codebase injects DbContext directly, do NOT recommend adding
+           a repository abstraction layer).
+        4. NEVER silently recommend a pattern that contradicts an established convention.
+           If you mention a conflicting generic alternative, label it explicitly as
+           'Alternativa generica (no aplica a este proyecto)' and explain why it does not apply.
+        5. Prioritize project-specific knowledge base rules over your general training knowledge.
         """;
 
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
@@ -65,24 +78,14 @@ public sealed class ChatExecutionService(
 
             if (!isConsultant)
             {
-                var knowledgeResponse = await RunDeterministicKnowledgeFlowAsync(
-                    request,
-                    chatService,
-                    chatHistory,
-                    onToken,
-                    ct);
-
-                return knowledgeResponse;
+                return await RunDeterministicKnowledgeFlowAsync(
+                    request, chatService, chatHistory, onToken, ct);
             }
 
             // Keep consultant stable while Anthropic tool-call protocol through the bridge
             // is still intermittently failing with tool_use/tool_result mismatches.
             return await RunDeterministicConsultantFlowAsync(
-                request,
-                chatService,
-                chatHistory,
-                onToken,
-                ct);
+                request, chatService, chatHistory, onToken, ct);
         }
         catch (Exception ex)
         {
@@ -98,9 +101,7 @@ public sealed class ChatExecutionService(
         CancellationToken ct)
     {
         var retrievedContext = await searchPlugin.SearchByMeaningAsync(
-            request.Message,
-            maxResults: 8,
-            cancellationToken: ct);
+            request.Message, maxResults: 8, cancellationToken: ct);
 
         var responseKernelBuilder = Kernel.CreateBuilder();
         responseKernelBuilder.Services.AddSingleton(chatService);
@@ -128,17 +129,13 @@ public sealed class ChatExecutionService(
             responseHistory.Insert(0, contextMessage);
 
         var responseBuilder = new System.Text.StringBuilder();
-        var noToolSettings = new PromptExecutionSettings();
+        var noToolSettings  = new PromptExecutionSettings();
 
         await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
         {
-            if (string.IsNullOrEmpty(chunk.Content))
-                continue;
-
+            if (string.IsNullOrEmpty(chunk.Content)) continue;
             responseBuilder.Append(chunk.Content);
-
-            if (onToken is not null)
-                await onToken(chunk.Content, ct);
+            if (onToken is not null) await onToken(chunk.Content, ct);
         }
 
         return Result<ChatExecutionResponse>.SuccessWith(
@@ -153,14 +150,19 @@ public sealed class ChatExecutionService(
         CancellationToken ct)
     {
         var userId = userAccessor.GetCurrentUserId();
-        var userProfile = await profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
-        var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
-            request.ConversationId.ToString(),
-            ct);
-        var retrievedContext = await searchPlugin.SearchByMeaningAsync(
-            request.Message,
-            maxResults: 8,
-            cancellationToken: ct);
+
+        // Gather all context sources in parallel for lower latency
+        var profileTask    = profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
+        var summaryTask    = summaryPlugin.GetConversationSummaryAsync(request.ConversationId.ToString(), ct);
+        var searchTask     = searchPlugin.SearchByMeaningAsync(request.Message, maxResults: 8, cancellationToken: ct);
+        var repoCtxTask    = repositoryContextPlugin.GetUserRepositoriesContextAsync(userId.ToString(), ct);
+
+        await Task.WhenAll(profileTask, summaryTask, searchTask, repoCtxTask);
+
+        var userProfile         = await profileTask;
+        var conversationSummary = await summaryTask;
+        var retrievedContext    = await searchTask;
+        var repositoryContext   = await repoCtxTask;
 
         var responseKernelBuilder = Kernel.CreateBuilder();
         responseKernelBuilder.Services.AddSingleton(chatService);
@@ -172,15 +174,22 @@ public sealed class ChatExecutionService(
 
         var contextMessage = new ChatMessageContent(
             AuthorRole.System,
-            "Consultant context (source of truth):\n" +
-            $"- User profile:\n{userProfile}\n\n" +
-            $"- Conversation summary:\n{conversationSummary}\n\n" +
-            $"- Retrieved project knowledge:\n{retrievedContext}\n\n" +
-            "Response policy:\n" +
-            "1. Start with a tailored architecture recommendation based on user profile and team context.\n" +
-            "2. Prioritize retrieved project rules over generic advice.\n" +
-            "3. If a recommendation is generic and not a project rule, label it clearly as 'Alternativa generica'.\n" +
-            "4. Keep practical next steps explicit and concise.");
+            "Consultant context (source of truth — you MUST follow every constraint below):\n\n" +
+            $"## User profile\n{userProfile}\n\n" +
+            $"## Conversation summary\n{conversationSummary}\n\n" +
+            $"## Knowledge base rules\n{retrievedContext}\n\n" +
+            $"## Existing codebase patterns (HIGHEST priority — never contradict these)\n{repositoryContext}\n\n" +
+            "## Response policy\n" +
+            "1. Tailor every recommendation to the user profile and team context.\n" +
+            "2. CRITICAL: The 'Existing codebase patterns' section above is ground truth. " +
+            "Any recommendation you make MUST be consistent with those patterns.\n" +
+            "3. If the codebase already uses a specific pattern " +
+            "(e.g. direct DbContext injection, no repository layer, Minimal API, Clean Architecture), " +
+            "REINFORCE that pattern — do not contradict it without explicit justification.\n" +
+            "4. If you mention a generic alternative that conflicts with a detected pattern, " +
+            "label it 'Alternativa generica (no aplica a este proyecto)' and explain the trade-off.\n" +
+            "5. Prioritize knowledge base rules over your general training knowledge.\n" +
+            "6. Keep practical next steps explicit and actionable.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);
@@ -188,17 +197,13 @@ public sealed class ChatExecutionService(
             responseHistory.Insert(0, contextMessage);
 
         var responseBuilder = new System.Text.StringBuilder();
-        var noToolSettings = new PromptExecutionSettings();
+        var noToolSettings  = new PromptExecutionSettings();
 
         await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
         {
-            if (string.IsNullOrEmpty(chunk.Content))
-                continue;
-
+            if (string.IsNullOrEmpty(chunk.Content)) continue;
             responseBuilder.Append(chunk.Content);
-
-            if (onToken is not null)
-                await onToken(chunk.Content, ct);
+            if (onToken is not null) await onToken(chunk.Content, ct);
         }
 
         return Result<ChatExecutionResponse>.SuccessWith(
@@ -212,10 +217,10 @@ public sealed class ChatExecutionService(
         {
             var role = msg.Role switch
             {
-                MessageRole.User => AuthorRole.User,
+                MessageRole.User      => AuthorRole.User,
                 MessageRole.Assistant => AuthorRole.Assistant,
-                MessageRole.System => AuthorRole.System,
-                _ => AuthorRole.User,
+                MessageRole.System    => AuthorRole.System,
+                _                     => AuthorRole.User,
             };
 
             history.Add(new ChatMessageContent(role, msg.Content));

@@ -10,16 +10,18 @@ public sealed class ConsultantAgentFactory
 {
     public Kernel CreateKernel(IServiceProvider services)
     {
-        var chatService    = services.GetRequiredService<IChatCompletionService>();
-        var profilePlugin  = services.GetRequiredService<ProfilePlugin>();
-        var summaryPlugin  = services.GetRequiredService<SummaryPlugin>();
-        var searchPlugin   = services.GetRequiredService<SearchPlugin>();
+        var chatService             = services.GetRequiredService<IChatCompletionService>();
+        var profilePlugin           = services.GetRequiredService<ProfilePlugin>();
+        var summaryPlugin           = services.GetRequiredService<SummaryPlugin>();
+        var searchPlugin            = services.GetRequiredService<SearchPlugin>();
+        var repositoryContextPlugin = services.GetRequiredService<RepositoryContextPlugin>();
 
         var builder = Kernel.CreateBuilder();
         builder.Services.AddSingleton(chatService);
-        builder.Plugins.AddFromObject(profilePlugin, "Profile");
-        builder.Plugins.AddFromObject(summaryPlugin, "Summary");
-        builder.Plugins.AddFromObject(searchPlugin,  "Search");
+        builder.Plugins.AddFromObject(profilePlugin,           "Profile");
+        builder.Plugins.AddFromObject(summaryPlugin,           "Summary");
+        builder.Plugins.AddFromObject(searchPlugin,            "Search");
+        builder.Plugins.AddFromObject(repositoryContextPlugin, "RepositoryContext");
 
         return builder.Build();
     }
