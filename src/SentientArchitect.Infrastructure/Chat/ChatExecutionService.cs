@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using SentientArchitect.Application.Common.Interfaces;
@@ -20,6 +21,7 @@ public sealed class ChatExecutionService(
     ProfilePlugin profilePlugin,
     SummaryPlugin summaryPlugin,
     RepositoryContextPlugin repositoryContextPlugin,
+    IApplicationDbContext db,
     IUserAccessor userAccessor) : IChatExecutionService
 {
     private const string KnowledgeSystemPrompt = """
@@ -151,18 +153,34 @@ public sealed class ChatExecutionService(
     {
         var userId = userAccessor.GetCurrentUserId();
 
-        // Gather all context sources in parallel for lower latency
-        var profileTask    = profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
-        var summaryTask    = summaryPlugin.GetConversationSummaryAsync(request.ConversationId.ToString(), ct);
-        var searchTask     = searchPlugin.SearchByMeaningAsync(request.Message, maxResults: 8, cancellationToken: ct);
-        var repoCtxTask    = repositoryContextPlugin.GetUserRepositoriesContextAsync(userId.ToString(), ct);
+        var conversation = await db.Conversations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == userId, ct);
 
-        await Task.WhenAll(profileTask, summaryTask, searchTask, repoCtxTask);
+        var resolvedMode = request.ContextMode ?? conversation?.ContextMode ?? ConsultantContextMode.Auto;
+        var resolvedStack = FirstNonEmpty(request.PreferredStack, conversation?.PreferredStack);
+        var resolvedRepositoryId = request.ActiveRepositoryId ?? conversation?.ActiveRepositoryId;
 
-        var userProfile         = await profileTask;
-        var conversationSummary = await summaryTask;
-        var retrievedContext    = await searchTask;
-        var repositoryContext   = await repoCtxTask;
+        if (ShouldAskClarification(request.Message, resolvedMode, resolvedStack, resolvedRepositoryId))
+        {
+            return Result<ChatExecutionResponse>.SuccessWith(
+                new ChatExecutionResponse(BuildClarificationPrompt(), "Consultant"));
+        }
+
+        // Plugins share the same scoped DbContext; keep this flow sequential to avoid
+        // "A second operation was started on this context instance" concurrency errors.
+        var userProfile = await profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
+        var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
+            request.ConversationId.ToString(),
+            ct);
+        var retrievedContext = await searchPlugin.SearchByMeaningAsync(
+            request.Message,
+            maxResults: 8,
+            cancellationToken: ct);
+        var repositoryContext = await repositoryContextPlugin.GetUserRepositoriesContextAsync(
+            userId.ToString(),
+            resolvedRepositoryId?.ToString(),
+            ct);
 
         var responseKernelBuilder = Kernel.CreateBuilder();
         responseKernelBuilder.Services.AddSingleton(chatService);
@@ -176,6 +194,9 @@ public sealed class ChatExecutionService(
             AuthorRole.System,
             "Consultant context (source of truth — you MUST follow every constraint below):\n\n" +
             $"## User profile\n{userProfile}\n\n" +
+            $"## Context mode\n{resolvedMode}\n\n" +
+            $"## Preferred stack\n{resolvedStack ?? "Not specified"}\n\n" +
+            $"## Active repository id\n{resolvedRepositoryId?.ToString() ?? "Not specified"}\n\n" +
             $"## Conversation summary\n{conversationSummary}\n\n" +
             $"## Knowledge base rules\n{retrievedContext}\n\n" +
             $"## Existing codebase patterns (HIGHEST priority — never contradict these)\n{repositoryContext}\n\n" +
@@ -189,7 +210,8 @@ public sealed class ChatExecutionService(
             "4. If you mention a generic alternative that conflicts with a detected pattern, " +
             "label it 'Alternativa generica (no aplica a este proyecto)' and explain the trade-off.\n" +
             "5. Prioritize knowledge base rules over your general training knowledge.\n" +
-            "6. Keep practical next steps explicit and actionable.");
+            "6. If context mode is StackBound or Generic, avoid imposing repository-specific conventions from a different stack.\n" +
+            "7. Keep practical next steps explicit and actionable.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);
@@ -209,6 +231,35 @@ public sealed class ChatExecutionService(
         return Result<ChatExecutionResponse>.SuccessWith(
             new ChatExecutionResponse(responseBuilder.ToString(), "Consultant"));
     }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    private static bool ShouldAskClarification(
+        string message,
+        ConsultantContextMode mode,
+        string? preferredStack,
+        Guid? activeRepositoryId)
+    {
+        if (mode != ConsultantContextMode.Auto)
+            return false;
+
+        if (activeRepositoryId.HasValue || !string.IsNullOrWhiteSpace(preferredStack))
+            return false;
+
+        var msg = message.ToLowerInvariant();
+        var isBroadDesignPrompt = msg.Contains("dise") || msg.Contains("arquitect") ||
+                                  msg.Contains("system") || msg.Contains("sistema") ||
+                                  msg.Contains("app") || msg.Contains("aplicaci");
+
+        return isBroadDesignPrompt;
+    }
+
+    private static string BuildClarificationPrompt()
+        => "Antes de proponer una arquitectura concreta necesito dos definiciones para evitar recomendaciones fuera de contexto:\n" +
+           "1. Queres una respuesta para ESTE proyecto/repo o una respuesta generica?\n" +
+           "2. Que stack queres usar para la implementacion (por ejemplo C#/.NET, Java/Spring, Go, Node)?\n\n" +
+           "Si queres respuesta para este repo, tambien podes pasar activeRepositoryId y el modo RepoBound para anclar la recomendacion al codigo real.";
 
     private static ChatHistory BuildChatHistory(IReadOnlyList<ConversationMessage> messages, string systemPrompt)
     {

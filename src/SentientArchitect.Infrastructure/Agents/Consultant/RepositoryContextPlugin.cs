@@ -16,14 +16,29 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
         "aligned with — not contradictory to — the patterns already in use.")]
     public async Task<string> GetUserRepositoriesContextAsync(
         [Description("User ID to fetch repository context for")] string userId,
+        [Description("Optional repository ID to scope context to a single repository")] string? repositoryId = null,
         CancellationToken cancellationToken = default)
     {
-        var userGuid = Guid.Parse(userId);
+        if (!Guid.TryParse(userId, out var userGuid))
+            return "Could not resolve user context. Continue with generic guidance and ask for repository scope.";
 
-        var repos = await db.Repositories
+        Guid? repositoryGuid = null;
+        if (!string.IsNullOrWhiteSpace(repositoryId))
+        {
+            if (!Guid.TryParse(repositoryId, out var parsedRepositoryGuid))
+                return "Repository scope is invalid. Ask the user to provide a valid repository id.";
+
+            repositoryGuid = parsedRepositoryGuid;
+        }
+
+        var reposQuery = db.Repositories
             .AsNoTracking()
-            .Where(r => r.UserId == userGuid)
-            .ToListAsync(cancellationToken);
+            .Where(r => r.UserId == userGuid);
+
+        if (repositoryGuid.HasValue)
+            reposQuery = reposQuery.Where(r => r.Id == repositoryGuid.Value);
+
+        var repos = await reposQuery.ToListAsync(cancellationToken);
 
         if (repos.Count == 0)
             return "No repositories found for this user. " +

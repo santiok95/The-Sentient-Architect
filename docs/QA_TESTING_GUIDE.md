@@ -334,11 +334,27 @@ Content-Type: application/json
 
 {
   "message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
-  "agentType": "Consultant"
+  "agentType": "Consultant",
+  "contextMode": "Auto"
 }
 ```
 
-**Esperado:** Similar al anterior — tokens por SignalR con respuesta del agente consultor.
+**Esperado:**
+- Si falta contexto (repo activo/stack), el Consultant puede responder primero con una pregunta de clarificación.
+- Si ya se define contexto, responde arquitectura directamente por tokens SignalR.
+
+Ejemplo con contexto explícito (evita ida y vuelta):
+
+```json
+{
+  "message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
+  "agentType": "Consultant",
+  "contextMode": "StackBound",
+  "preferredStack": "Java + Spring Boot"
+}
+```
+
+Valores válidos para `contextMode`: `Auto`, `RepoBound`, `StackBound`, `Generic`.
 
 ### Test 4.4: Chat en conversación inexistente
 

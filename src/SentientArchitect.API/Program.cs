@@ -7,6 +7,7 @@ using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Data.Postgres;
 using SentientArchitect.Infrastructure;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +41,10 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddSignalR();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();

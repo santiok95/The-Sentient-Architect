@@ -206,11 +206,31 @@ public sealed class CodeAnalyzer(
 
             await db.SaveChangesAsync(ct);
 
-            // Cleanup
+            // Cleanup must not invalidate a successfully completed analysis report.
             if (Directory.Exists(clonePath))
-                Directory.Delete(clonePath, true);
+            {
+                try
+                {
+                    Directory.Delete(clonePath, true);
+                }
+                catch (Exception cleanEx)
+                {
+                    logger.LogWarning(cleanEx,
+                        "Analysis completed but cleanup failed for repository {RepositoryInfoId}.",
+                        repositoryInfoId);
+                }
+            }
 
-            await reporter.ReportCompleteAsync(repositoryInfoId, report.Id, ct);
+            try
+            {
+                await reporter.ReportCompleteAsync(repositoryInfoId, report.Id, ct);
+            }
+            catch (Exception reportEx)
+            {
+                logger.LogWarning(reportEx,
+                    "Analysis completed but SignalR completion notification failed for repository {RepositoryInfoId}.",
+                    repositoryInfoId);
+            }
 
             logger.LogInformation("Analysis completed for repository {RepositoryInfoId}. Report: {ReportId}. {Summary}",
                 repositoryInfoId, report.Id, summary);
@@ -218,6 +238,13 @@ public sealed class CodeAnalyzer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Analysis failed for repository {RepositoryInfoId}.", repositoryInfoId);
+
+            // If the report is already completed, do not overwrite it to Failed due to
+            // post-processing errors (cleanup/notifications).
+            if (report?.Status == AnalysisStatus.Completed)
+            {
+                return;
+            }
 
             if (report is not null)
             {
