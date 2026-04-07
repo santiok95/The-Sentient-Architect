@@ -28,6 +28,7 @@ public class SearchKnowledgeUseCase(
             request.MaxResults,
             request.MinimumScore,
             request.IncludeShared,
+            request.IncludeAllScopes,
             ct);
 
         // 4 & 5. Hydrate with KnowledgeItem metadata and map to response records

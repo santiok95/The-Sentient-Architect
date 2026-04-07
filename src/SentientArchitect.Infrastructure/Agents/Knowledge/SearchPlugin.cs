@@ -28,7 +28,7 @@ public sealed class SearchPlugin(
 
         // 1. Try Vector Search
         var results = await vectorStore.SearchSimilarAsync(
-            embedding, userId, tenantId, maxResults, 0.35f, true, cancellationToken);
+            embedding, userId, tenantId, maxResults, 0.35f, true, false, cancellationToken);
 
         var searchLines = new List<string>();
 

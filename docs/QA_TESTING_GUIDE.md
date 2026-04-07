@@ -342,6 +342,7 @@ Content-Type: application/json
 **Esperado:**
 - Si falta contexto (repo activo/stack), el Consultant puede responder primero con una pregunta de clarificación.
 - Si ya se define contexto, responde arquitectura directamente por tokens SignalR.
+- En `RepoBound`, no debe empujar migración por defecto; solo puede sugerirla con justificación explícita por constraints no funcionales (p. ej. concurrencia extrema, SLO/latencia, throughput u operación).
 
 Ejemplo con contexto explícito (evita ida y vuelta):
 
@@ -355,6 +356,40 @@ Ejemplo con contexto explícito (evita ida y vuelta):
 ```
 
 Valores válidos para `contextMode`: `Auto`, `RepoBound`, `StackBound`, `Generic`.
+
+#### Semántica rápida para QA
+
+- `agentType: Knowledge`: responde con base en knowledge retrieval del proyecto.
+- `agentType: Consultant`: responde con contexto de perfil, resumen de conversación, reglas y repositorio.
+- `contextMode: Auto`: si falta contexto fuerte (`activeRepositoryId` o `preferredStack`) puede pedir clarificación primero.
+- `contextMode: RepoBound`: prioriza patrones del repo analizado indicado por `activeRepositoryId`.
+- `contextMode: StackBound`: prioriza `preferredStack` para recomendaciones de arquitectura.
+- `contextMode: Generic`: recomendaciones generales no atadas a repo específico.
+
+#### Matriz mínima de pruebas recomendada
+
+1. `Knowledge` sin `contextMode`:
+  - Request: `agentType = Knowledge`.
+  - Esperado: respuesta por `ReceiveToken` + `ReceiveComplete` sin pregunta de clarificación.
+2. `Consultant + Auto` sin `activeRepositoryId` y sin `preferredStack`:
+  - Request: `agentType = Consultant`, `contextMode = Auto`.
+  - Esperado: puede devolver pregunta de clarificación primero, incluyendo intención cuando hay conflicto (optimizar repo actual, coexistencia/híbrido o migración completa).
+3. `Consultant + StackBound`:
+  - Request: `contextMode = StackBound`, `preferredStack = "Java + Spring Boot"`.
+  - Esperado: respuesta directa de arquitectura, sin clarificación inicial.
+4. `Consultant + RepoBound`:
+  - Request: `contextMode = RepoBound`, `activeRepositoryId = <REPO_ID>`.
+  - Esperado: recomendaciones ancladas al repositorio analizado, sin empujar migración salvo evidencia de mismatch no funcional.
+5. `Consultant + Generic` con stack explícito:
+  - Request: `contextMode = Generic`, `preferredStack = "Java + Spring Boot"`.
+  - Esperado: recomendación principal y ejemplos de código en Java/Spring; otros stacks solo como alternativa explícita con trade-offs.
+6. `Consultant + RepoBound` con presión extrema de concurrencia:
+  - Request: incluir objetivo explícito de alta concurrencia (p. ej. decenas de miles de requests concurrentes y SLO agresivo).
+  - Esperado: puede recomendar alternativa de stack si está justificada, pero debe explicar evidencia y ofrecer al menos una mitigación dentro del stack actual antes de migrar.
+7. Persistencia de contexto por conversación:
+  - Primer request: enviar `contextMode` + `preferredStack` o `activeRepositoryId`.
+  - Segundo request: omitir esos campos.
+  - Esperado: el comportamiento mantiene el contexto ya guardado en la conversación.
 
 ### Test 4.4: Chat en conversación inexistente
 

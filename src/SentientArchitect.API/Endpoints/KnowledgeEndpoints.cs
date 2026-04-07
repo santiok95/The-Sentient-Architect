@@ -47,19 +47,24 @@ public class KnowledgeEndpoints : IEndpointModule
             [FromQuery] string q,
             [FromServices] IUserAccessor userAccessor,
             [FromServices] SearchKnowledgeUseCase useCase,
+            HttpContext httpContext,
             CancellationToken ct,
             [FromQuery] int maxResults = 5,
-            [FromQuery] bool includeShared = true) =>
+            [FromQuery] bool includeShared = true,
+            [FromQuery] float minimumScore = 0.35f) =>
         {
             var userId   = userAccessor.GetCurrentUserId();
             var tenantId = userAccessor.GetCurrentTenantId();
+            var includeAllScopes = httpContext.User.IsInRole("Admin");
 
             var request = new SearchKnowledgeRequest(
                 userId,
                 tenantId,
                 q,
                 maxResults,
-                includeShared);
+                includeShared,
+                minimumScore,
+                includeAllScopes);
 
             var result = await useCase.ExecuteAsync(request, ct);
 
