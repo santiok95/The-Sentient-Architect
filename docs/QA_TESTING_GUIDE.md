@@ -655,14 +655,28 @@ GET /api/v1/trends/<TREND_ID>/snapshots
 
 > Usar `TOKEN_ADMIN` para estos tests.
 
-### Test 8.1: Listar publish requests (admin)
+### Test 8.0: Crear un Publish Request (Rol Usuario)
+
+```http
+POST /api/v1/knowledge/<KNOWLEDGE_ITEM_ID>/publish
+Authorization: Bearer <TOKEN_USER>
+Content-Type: application/json
+
+{
+  "reason": "Documentación útil para todo el equipo."
+}
+```
+
+**Esperado:** `200 OK` (o 202 dependiendo del Result map).
+
+### Test 8.1: Listar publish requests (Admin)
 
 ```http
 GET /api/v1/admin/publish-requests
 Authorization: Bearer <TOKEN_ADMIN>
 ```
 
-**Esperado:** `200 OK` — lista (posiblemente vacía si nadie pidió publicar).
+**Esperado:** `200 OK` — lista con el request que acabás de crear en el paso 8.0.
 
 ### Test 8.2: Acceso denegado con usuario normal
 

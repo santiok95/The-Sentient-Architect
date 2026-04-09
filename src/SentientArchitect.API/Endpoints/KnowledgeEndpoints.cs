@@ -6,6 +6,7 @@ using SentientArchitect.Application.Features.Knowledge.DeleteKnowledgeItem;
 using SentientArchitect.Application.Features.Knowledge.GetKnowledgeItems;
 using SentientArchitect.Application.Features.Knowledge.IngestKnowledge;
 using SentientArchitect.Application.Features.Knowledge.SearchKnowledge;
+using SentientArchitect.Application.Features.Knowledge.RequestPublishKnowledge;
 using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.API.Endpoints;
@@ -95,8 +96,24 @@ public class KnowledgeEndpoints : IEndpointModule
         })
         .WithName("DeleteKnowledge")
         .WithOpenApi();
+        group.MapPost("/{id:guid}/publish", async (
+            [FromRoute] Guid id,
+            [FromBody] RequestPublishHttpRequest body,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] RequestPublishKnowledgeUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var request = new RequestPublishKnowledgeRequest(userId, id, body.Reason);
+            var result = await useCase.ExecuteAsync(request, ct);
+            return result.ToHttpResult(); // Returns 200 OK or generic map depending on extensions
+        })
+        .WithName("RequestPublishKnowledge")
+        .WithOpenApi();
     }
 
+    public record RequestPublishHttpRequest(string? Reason);
+    
     private record IngestKnowledgeHttpRequest(
         string Title,
         string OriginalContent,
