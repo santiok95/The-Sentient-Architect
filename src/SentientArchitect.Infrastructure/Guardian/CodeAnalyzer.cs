@@ -43,7 +43,7 @@ public sealed class CodeAnalyzer(
             // Clone repository
             clonePath = Path.Combine(Path.GetTempPath(), "sentient-repos", repositoryInfoId.ToString());
             if (Directory.Exists(clonePath))
-                Directory.Delete(clonePath, true);
+                DeleteDirectory(clonePath);
 
             LibGit2Sharp.Repository.Clone(repositoryInfo.RepositoryUrl, clonePath);
 
@@ -211,7 +211,7 @@ public sealed class CodeAnalyzer(
             {
                 try
                 {
-                    Directory.Delete(clonePath, true);
+                    DeleteDirectory(clonePath);
                 }
                 catch (Exception cleanEx)
                 {
@@ -270,7 +270,7 @@ public sealed class CodeAnalyzer(
 
             if (clonePath is not null && Directory.Exists(clonePath))
             {
-                try { Directory.Delete(clonePath, true); }
+                try { DeleteDirectory(clonePath); }
                 catch (Exception cleanEx) { logger.LogWarning(cleanEx, "Failed to clean up clone directory."); }
             }
         }
@@ -487,5 +487,16 @@ public sealed class CodeAnalyzer(
         }
 
         return findings;
+    }
+
+    private static void DeleteDirectory(string targetDir)
+    {
+        if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir)) return;
+
+        foreach (var file in Directory.GetFiles(targetDir, "*.*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+        Directory.Delete(targetDir, true);
     }
 }

@@ -487,8 +487,12 @@ Authorization: Bearer <TOKEN_USER>
 }
 ```
 
-> Sin API key de OpenAI, `results` estará vacío (NullEmbeddingService retorna embeddings nulos).
-
+> **🚨 TIPS DE TROUBLESHOOTING - SEARCH DEVUELVE 0 RESULTADOS:**
+> 
+> Si al buscar te devuelve `"results": [], "totalFound": 0` a pesar de saber que tenés artículos cargados en tu base de datos:
+> 1. **Vectores Inexistentes:** Fijate *cuándo* se crearon esos registros. Si la data (`KnowledgeItems`) se ingestó **ANTES** de que configures tu `AI:OpenAI:ApiKey` en el backend, la capa de infraestructura usó el `NullEmbeddingService`. Es decir, la tabla tiene el texto pero no hay vectores en `KnowledgeEmbeddings`.
+> 2. **Solución:** Tenés que ingestar la data de nuevo ahora que sí tenés las claves habilitadas.
+> 3. **Verificación visual del costo:** En la respuesta del `POST` a `/api/v1/knowledge` vas a ver `"chunksCreated": 1`. Y si vas al dashboard de OpenAI y el uso te marca `< $0.01`... ¡Es normal! El modelo `text-embedding-3-small` es tan barato (~$0.02 el millón de tokens) que procesar artículos cortos no mueve la aguja en el dashboard, pero el `score` de similitud que devuelve la búsqueda (ej: `0.637`) es la prueba viviente de que funciona maravillosamente.
 ### Test 5.5: Eliminar knowledge item
 
 ```http
@@ -519,7 +523,7 @@ Authorization: Bearer <TOKEN_USER>
 Content-Type: application/json
 
 {
-  "repositoryUrl": "https://github.com/dotnet/aspnetcore",
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git",
   "trust": 1
 }
 ```
@@ -528,10 +532,15 @@ Content-Type: application/json
 ```json
 {
   "repositoryId": "<GUID>",
-  "repositoryUrl": "https://github.com/dotnet/aspnetcore"
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git"
 }
 ```
 > Guardar `repositoryId` como `REPO_ID`. Nota: para una prueba más rápida, usar un repo chico.
+
+{
+  "repositoryId": "019d6db5-22a5-7739-a800-575f34d699e7",
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git"
+}
 
 ### Test 6.2: Listar repositorios
 
@@ -542,16 +551,21 @@ Authorization: Bearer <TOKEN_USER>
 
 **Esperado:** `200 OK` con el repositorio registrado.
 
-### Test 6.3: Conectar a SignalR de análisis
+### Test 6.3: Conectar a SignalR de análisis (Progreso en tiempo real)
 
-```
-URL: wss://localhost:7242/hubs/analysis?access_token=<TOKEN_USER>
-```
+Para probar SignalR, lo ideal es usar **Postman** (que ahora tiene soporte nativo para SignalR).
 
-Invocar:
-```json
-{ "type": 1, "target": "JoinRepository", "arguments": ["<REPO_ID>"] }
-```
+**Pasos en Postman:**
+1. Hacé click en "New" -> "WebSocket" y elegí la pestaña **SignalR**.
+2. En la URL poné: `wss://localhost:7242/hubs/analysis?access_token=<TOKEN_USER>`
+   *(Fijate que es `wss://` y que le pasamos el token por querystring porque los WebSockets en el navegador no soportan mandar headers custom).*
+3. Hacé click en **Connect**.
+4. Una vez conectado, tenés que suscribirte al grupo del repositorio para recibir sus eventos. Para esto mandá el siguiente evento de Invocación desde la pestaña "Messages":
+   - **Target:** `JoinRepository`
+   - **Arguments:** `["<REPO_ID>"]` (Acá va el GUID del repo que creaste en el paso 6.1)
+
+> **Nota técnica (si usás un cliente WebSocket pelado sin soporte SignalR):**
+> Vas a tener que mandar primero el handshake de inicio: `{"protocol":"json","version":1} (terminado con el byte 0x1E)`. Y luego tu mensaje `{ "type": 1, "target": "JoinRepository", "arguments": ["<REPO_ID>"] }` seguido también por el carácter especial `0x1E` (Record Separator) para que el servidor entienda que ahí terminó la trama.
 
 ### Test 6.4: Disparar análisis
 
