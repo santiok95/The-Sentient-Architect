@@ -19,6 +19,13 @@ En el desarrollo de software moderno, el conocimiento está fragmentado y la deu
 
 ---
 
+## 🎯 ¿Para quién es esto?
+
+*   **👶 Para el Junior Developer:** Es su **"Guardaespaldas Arquitectónico"**. Le permite tomar decisiones con confianza, asegurando que cada línea de código siga los patrones y estándares de diseño ya establecidos por el equipo de arquitectura. Menos dudas, más código de calidad.
+*   **👴 Para el Senior Architect:** Es su **"Radar de Vanguardia"**. En un mundo donde aparece un framework nuevo cada día, el sistema actúa como un filtro inteligente. Provee snapshots curados y análisis de tracción real, permitiendo al Senior concentrarse en la estrategia mientras el sistema monitorea el ecosistema.
+
+---
+
 ## 🧩 Los 4 Pilares del Sistema
 
 ### 1. 🧠 Semantic Brain
