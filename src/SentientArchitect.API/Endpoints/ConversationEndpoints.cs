@@ -4,6 +4,7 @@ using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Conversations.CreateConversation;
 using SentientArchitect.Application.Features.Conversations.DeleteConversation;
+using SentientArchitect.Application.Features.Conversations.GetConversationDetail;
 using SentientArchitect.Application.Features.Conversations.GetConversations;
 
 namespace SentientArchitect.API.Endpoints;
@@ -43,6 +44,17 @@ public class ConversationEndpoints : IEndpointModule
             return result.ToHttpResult();
         })
         .WithName("GetConversations")
+        .WithOpenApi();
+
+        group.MapGet("/{id:guid}", async (
+            [FromRoute] Guid id,
+            [FromServices] GetConversationDetailUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new GetConversationDetailRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetConversationDetail")
         .WithOpenApi();
 
         group.MapDelete("/{id:guid}", async (

@@ -17,6 +17,7 @@ import {
 } from '../hooks/useConversations'
 import { sendMessageAction } from '../actions'
 import { useHub } from '@/hooks/useHub'
+import { getHubConnection } from '@/lib/signalr'
 import { useUiStore } from '@/store/ui-store'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 
@@ -112,28 +113,41 @@ export function ChatPanel({ conversationId }: Props) {
   )
   const [isPending, startTransition] = useTransition()
 
-  // ── SignalR: conversation hub ──────────────────────────────────────────────
-  const handleReceiveChunk = useCallback((convId: string, token: string) => {
-    if (convId !== conversationId) return
-    streamBufferRef.current += token
+  // ── SignalR: join/leave hub group when conversation changes ───────────────
+  useEffect(() => {
+    if (!conversationId) return
+    const connection = getHubConnection('conversation')
+    connection.invoke('JoinConversation', conversationId).catch(() => {
+      // Hub may not be started yet — useHub below handles retry on reconnect
+    })
+    return () => {
+      connection.invoke('LeaveConversation', conversationId).catch(() => {})
+    }
   }, [conversationId])
 
-  const handleReceiveComplete = useCallback((convId: string) => {
-    if (convId !== conversationId) return
+  // ── SignalR: conversation hub ──────────────────────────────────────────────
+  // Backend sends ReceiveToken(token) — single arg, no convId prefix.
+  // The hub group is scoped to the conversationId so filtering by convId is unnecessary.
+  const handleReceiveChunk = useCallback((token: string) => {
+    streamBufferRef.current += token
+  }, [])
+
+  const handleReceiveComplete = useCallback(() => {
     // Flush remaining buffer and close stream
     if (flushTimerRef.current) clearInterval(flushTimerRef.current)
     flushTimerRef.current = null
     setStreamingContent(null)
     streamBufferRef.current = ''
-    queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(convId) })
-    queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+    if (conversationId) {
+      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(conversationId) })
+      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+    }
     // Release the transition: useOptimistic merges with the incoming server state
     streamCompleteRef.current?.()
     streamCompleteRef.current = null
   }, [conversationId, queryClient])
 
-  const handleReceiveError = useCallback((convId: string, message: string) => {
-    if (convId !== conversationId) return
+  const handleReceiveError = useCallback((message: string) => {
     if (flushTimerRef.current) clearInterval(flushTimerRef.current)
     flushTimerRef.current = null
     setStreamingContent(null)
@@ -142,11 +156,11 @@ export function ChatPanel({ conversationId }: Props) {
     // Release the transition so useOptimistic auto-reverts the optimistic message
     streamCompleteRef.current?.()
     streamCompleteRef.current = null
-  }, [conversationId])
+  }, [])
 
   useHub('conversation', {
     handlers: {
-      ReceiveMessageChunk: handleReceiveChunk as (...args: unknown[]) => void,
+      ReceiveToken: handleReceiveChunk as (...args: unknown[]) => void,
       ReceiveComplete: handleReceiveComplete as (...args: unknown[]) => void,
       ReceiveError: handleReceiveError as (...args: unknown[]) => void,
     },
