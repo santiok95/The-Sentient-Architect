@@ -49,16 +49,16 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Test Hooks de Layout | `tests/layout` | 📋 | Validar que el Sidebar colapse según store y se fijen skeletons en carga. |
-| 1. Configurar Zustand Store | `store/ui-store.ts` | 📋 | Estado visual (ej: `sidebarOpen`, `consultantPanelOpen`). |
-| 2. Sidebar Fijo Fira Code nav | `components/shared/layout/Sidebar.tsx` | 📋 | Integrar Logo y botones con fuentes técnicas. |
-| 3. Topbar (ThemeToggle + actions)| `components/shared/layout/Topbar.tsx` | 📋 | Cmd+K Search trigger (vista vacía por ahora), botón "Consultant". |
-| 4. Consultant Panel (Slide) | `components/shared/layout/ConsultantPanel.tsx`| 📋 | Ocupará 380px. Estado dependiente de Zustand. Shell vacío por ahora. |
-| 5. AppShell Layout general | `app/(dashboard)/layout.tsx` | 📋 | Flex grid combinando Sidebar + Main + Consultant Panel. |
-| 6. Responsive UI Handlers | `AppShell` | 📋 | `<768px` pasa Sidebar a Mobile Bottom/Drawer. `<1100px` superpone ConsultantPanel. |
-| 7. Dashboard RSC Home | `app/(dashboard)/page.tsx` | 📋 | Título, StatCards y estructura dos columnas del Dashboard. |
-| 8. Dashboard Ghost Loaders | `app/(dashboard)/loading.tsx` | 📋 | Skeletons visualmente calcados del dashboard real para feedback veloz. |
-| 9. Error Boundary & Suspense | `app/(dashboard)/error.tsx` | 📋 | Limitar impacto de roturas a nivel de hoja, no de toda el App Shell. |
+| 0. Test Hooks de Layout | `src/__tests__/layout/` | ✅ | 7 tests Sidebar + 6 tests ConsultantPanel — 26/26 passing. |
+| 1. Configurar Zustand Store | `store/ui-store.ts` | ✅ | Ya completo desde Phase 1. sidebarOpen, consultantPanelOpen, setters, selectors. |
+| 2. Sidebar Fijo Fira Code nav | `components/shared/layout/Sidebar.tsx` | ✅ | Logo, 4 grupos nav, badges violet/red, user card footer. Mobile Sheet. |
+| 3. Topbar (ThemeToggle + actions)| `components/shared/layout/Topbar.tsx` | ✅ | Fira Code title desde pathname, Search ⌘K trigger, theme toggle, notifs, Consultant btn. |
+| 4. Consultant Panel (Slide) | `components/shared/layout/ConsultantPanel.tsx`| ✅ | 380px slide-in, data-open attr, close btn → Zustand, welcome msg, textarea+send. |
+| 5. AppShell Layout general | `components/shared/layout/AppShell.tsx` + `app/(dashboard)/layout.tsx` | ✅ | 3-col flex: Sidebar + flex-1 (Topbar+main) + ConsultantPanel. |
+| 6. Responsive UI Handlers | `AppShell` | ✅ | md: CSS show/hide sidebar. xl: ConsultantPanel inline vs absolute overlay. |
+| 7. Dashboard RSC Home | `app/(dashboard)/page.tsx` | ✅ | Greeting, quick actions, 4 StatCards, knowledge table, trends, pending approvals. |
+| 8. Dashboard Ghost Loaders | `app/(dashboard)/loading.tsx` | ✅ | Skeleton layout calca exactamente el dashboard: header, stats, table, right col. |
+| 9. Error Boundary & Suspense | `app/(dashboard)/error.tsx` | ✅ | AlertTriangle + retry button, logs error, 'use client' requerido por Next.js. |
 
 ---
 
