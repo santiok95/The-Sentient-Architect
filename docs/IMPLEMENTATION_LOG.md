@@ -133,3 +133,24 @@ _None yet — will be populated during implementation._
 | Autorizacion de membresia a grupos SignalR | 📋 | Pendiente: validar ownership/tenant antes de `AddToGroupAsync` en ConversationHub, AnalysisHub e IngestionHub. |
 | Refactor ChatEndpoints (separacion de responsabilidades) | 📋 | Prioridad alta. Implementar plan por etapas definido en `docs/REFACTORING_PLAN.md` para reducir riesgo de regresion. |
 | SearchPlugin keyword fallback escalable | 📋 | Pendiente: mover filtro de keywords a DB (FTS/trigram/ILIKE indexado), evitar `ToListAsync` + filtrado en memoria en datasets grandes. |
+
+---
+
+## Future Scalability (Phase X) — Redis Topology
+
+Como plan de arquitectura comprobada a futuro, cuando la plataforma alcance la necesidad de escalar horizontalmente (múltiples nodos de backend) o maneje picos severos de usuarios concurrentes, se agregará un tier de **Redis (In-Memory Data Store)**. 
+
+Redis **no reemplazará a PostgreSQL**, funcionará como una capa flotante enfocada a tres puntos críticos:
+
+1. **SignalR Backplane**: Para permitir escalamiento horizontal. Cuando existen múltiples réplicas de la Minimal API, Redis orquestará los WebSockets. Si un background worker finaliza un token de la IA en la *Réplica A* y el usuario está conectado en la *Réplica C*, el Backplane rutea por pub/sub el evento y mantiene el stream sincronizado sin pérdida de datos.
+2. **Distributed Caching (`IDistributedCache`)**: Para aliviar queries pesadas de PostgreSQL. Data predominantemente estática como los **Trends Snapshots** de la Fase 4 o los análisis históricos pesados de un repositorio, se cachearán con invalidación en Redis. Time-To-Live (TTL) estricto.
+3. **Rate Limiting Estricto y Centralizado**: Como escudo financiero. Limitar la cantidad extrema de requests hacia APIs de IA pagas (Ej: *15 msg/min por Token JWT*). Redis resolverá estos "counters" eficientemente y compartirá el conteo a través de los nodos independientemente del Load Balancer que esté operando delante de la API.
+4. **Distributed Locking (Redlock)**: Crítico para esquivar 'Race Conditions' en operaciones destructivas o costosas. Ejemplo en Code Guardian: si un usuario aprieta 3 veces el botón de "Analizar repo", usamos un lock en Redis con la URL de GitHub. Si un worker lo está clonando, los otros abortan y evitan sobrescribir la carpeta `temp-repos/`.
+5. **Semantic Caching (Redis Stack)**: Evaluar cachear vectores además de strings usando Redis Stack. Si el query del chat *"¿Cómo escalo SignalR?"* es semánticamente idéntico a *"Mejor forma de escalar WebSockets en .NET"*, Redis intersecta los embeddings y devuelve el pre-computado sin gastar tokens en el LLM. El "escudo financiero" definitivo.
+6. **Task Message Broker (Resiliencia de Background Jobs)**: Actuar como cola rápida para Hangfire o MassTransit durante la ingesta masiva (Fase 1). Si un nodo se apaga por OOM mientras genera embeddings, la tarea no se purga, sino que vuelve a la cola y un nodo sano la asume.
+
+### Consideraciones Técnicas de Implementación (The Architect's Checklist)
+
+- **ConnectionMultiplexer forzado a Singleton**: En .NET la creación de conexiones Redis es cara (`ConnectionMultiplexer`). JAMÁS registrarlo como Transient o Scoped, siempre como `AddSingleton()` para evitar _socket exhaustion_.
+- **Estrategia C-UD (Create-Update/Delete) para Invalidación:** Todo `OutputCache` o caching de reportes (Guardian) debe ser invalidado forzosamente si un usuario ejecuta un *Re-Analyze* o un *AcceptSuggestion*, evitando latencia de estado visual obsoleto.
+- **TLS Obligatorio en Redis:** Incluso si está en una VPC (Virtual Private Cloud), usar encripción en tránsito hacia la instancia de Redis si en algún momento se deciden cachear los PII del UserProfile.

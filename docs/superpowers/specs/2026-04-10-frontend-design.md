@@ -304,3 +304,26 @@ Every user interaction (sending a message, adding a tag, approving a publish req
 
 ### Visual Identity (The Architect's Touch)
 Vi el mockup (`ui-mockup-dashboard.png`) y esa estética **"Dark/Neon Purple"** es el camino. Para reforzar el look de **"herramienta de ingeniería"**, usamos **Fira Code** en los headings y elementos técnicos.
+
+---
+
+## 12. Testing Strategy (Symmetry with Backend)
+
+To maintain symmetry with the robust backend testing strategy, the frontend implements three layers of testing granularity. **No code debt is allowed**: every phase begins with 'Task 0: Define the test contract'.
+
+1. **Unit Tests (Pure Logic)**
+   - **Tools:** Vitest + React Testing Library
+   - **Target:** `lib/utils.ts`, Zod schemas in `lib/schemas.ts`, Zustand stores, and Server Action logic.
+   - **Rule:** Test business logic in isolation. UI rendering is secondary here.
+
+2. **Integration Tests (Components + Hooks)**
+   - **Tools:** Vitest + Mock Service Worker (MSW)
+   - **Target:** Mapped API interaction and state changes.
+   - **Critical Scenario:** Ensure the SignalR Singleton updates the React UI state correctly without duplicated connections/messages when mocked chunks drop in.
+
+3. **E2E Tests (Complete Business Flows)**
+   - **Tools:** Playwright
+   - **Target:** Happy paths and critical workflows. Mandatory before generating Docker images in CI.
+   - **Key Flows:**
+     - Login → Submit Repo → See real-time analysis progress → View Final Report.
+     - Open Chat → Send Message via Server Action → Receive Streaming response via SignalR.
