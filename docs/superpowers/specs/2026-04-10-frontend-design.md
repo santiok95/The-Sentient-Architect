@@ -9,14 +9,15 @@
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Framework | Next.js 15 (App Router) | SSR for public pages (landing, register), CSR for dashboard |
+| Framework | Next.js 15 (App Router) | React 19 primitives (useOptimistic, useActionState) |
 | Component library | shadcn/ui + Tailwind CSS | Owned code, no dependency lock-in, Radix UI accessibility |
 | Theming | next-themes + CSS variables | User-selectable dark/light, persisted in profile |
 | Server state | TanStack Query v5 | Cache, loading states, auto-revalidation |
-| Client state | Zustand | UI-only state (sidebar, theme toggle) — minimal |
-| Forms/mutations | next-safe-action + Zod | Result Pattern equivalent for the frontend |
-| Real-time | @microsoft/signalr | Connect to ConversationHub, AnalysisHub, IngestionHub |
-| Type safety | openapi-typescript (auto-gen from Scalar) | End-to-end types from .NET API spec |
+| Client state | Zustand | UI-only state + **SignalR Singleton** management |
+| Forms/mutations | next-safe-action + useOptimistic | Result Pattern + Zero-latency UI response |
+| Real-time | @microsoft/signalr (Singleton) | Persistent connection, streams tokens for AI responses |
+| Type safety | openapi-typescript | End-to-end types from .NET API spec |
+| Typography | Inter (UI) + Fira Code (Technical) | Clean readability + Architectural/Engineering feel |
 | Architecture pattern | Feature-Based (Modular) | Mirrors Clean Architecture of the backend |
 
 ---
@@ -189,13 +190,22 @@ IngestForm (Client Component)
                                 └── TanStack Query invalidates cache
 ```
 
-### Pattern C — Real-time Chat (SignalR, NO Server Action)
+### Pattern C — Real-time Chat (Zero-Latency Hybrid)
 ```
-useConversation.ts
-  ├── POST /conversations/{id}/messages   ← direct HTTP (202 Accepted)
-  └── signalr.on('ReceiveMessageChunk')  ← streams tokens to UI state
-        └── signalr.on('MessageCompleted') ← finalizes, updates TanStack cache
+ChatPanel (Client Component)
+  ├── useOptimistic(messages)            ← React 19 hook
+  ├── onSubmit: 
+  │     ├── 1. Push message to Optimistic state (Instant UI)
+  │     └── 2. Call sendMessageAction (Server Action)
+  ├── Server Action:
+  │     └── Validates Zod → Calls .NET API → Returns Result
+  └── SignalR (Singleton):
+        ├── .on('ReceiveMessageChunk')   ← Streams AI tokens to local state
+        └── .on('MessageCompleted')      ← Syncs final message with DB/Query Cache
 ```
+
+> [!CAUTION]
+> **SignalR Singleton Pattern:** The Hub connection MUST live in a persistent container (e.g., a Zustand store or a module-level variable) to survive component re-renders and React 19's stricter StrictMode, preventing socket leaks.
 
 ### Pattern D — Async Progress (SignalR)
 ```
@@ -279,3 +289,18 @@ npx openapi-typescript http://localhost:5000/openapi/v1.json -o src/lib/api.type
 - No `any` types — TypeScript strict mode on.
 - No `localStorage` for auth tokens.
 - No business logic in `app/` pages — pages are thin shells that import from `features/`.
+
+---
+
+## 11. Resiliency & Advanced UX (The 10/10 Layer)
+
+### Optimistic UI
+Every user interaction (sending a message, adding a tag, approving a publish request) must use React 19's `useOptimistic`. The UI must change **before** the server responds to provide a premium, snappy feel.
+
+### Offline & Reconnection Queue
+*   **Heartbeat Monitor:** A background process (via `lib/signalr.ts`) that detects socket drops.
+*   **Pending Queue:** If a message fails due to network issues, it is stored in a `pendingMessages` array in the UI-Store.
+*   **Retry Logic:** The UI shows a "Retry" button on failed messages instead of a generic error toast.
+
+### Visual Identity (The Architect's Touch)
+Vi el mockup (`ui-mockup-dashboard.png`) y esa estética **"Dark/Neon Purple"** es el camino. Para reforzar el look de **"herramienta de ingeniería"**, usamos **Fira Code** en los headings y elementos técnicos.

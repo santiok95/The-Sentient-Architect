@@ -63,7 +63,7 @@
 | Semantic Kernel agent — Consultant | ✅ | ChatCompletionAgent with ProfilePlugin + SummaryPlugin + SearchPlugin |
 | OpenAI embeddings | ✅ | OpenAIEmbeddingService wrapping ITextEmbeddingGenerationService (text-embedding-3-small, 1536 dims) |
 | Anthropic chat integration | ✅ | AnthropicClient → AsBuilder() → UseFunctionInvocation() → AsChatCompletionService() bridge |
-| SignalR streaming | 📋 | |
+| SignalR streaming | ✅ | ConversationHub, AnalysisHub e IngestionHub implementados (falta asegurar membresía a grupos) |
 
 ## Phase 3 — Code Guardian
 | Item | Status | Notes |

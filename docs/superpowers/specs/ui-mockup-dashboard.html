@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sentient Architect — Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #09090b;
@@ -90,11 +90,12 @@
       font-size: 15px; font-weight: 700; color: #fff;
       flex-shrink: 0;
     }
-    .logo-text { font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
-    .logo-sub { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+    .logo-text { font-family: 'Fira Code', monospace; font-weight: 600; font-size: 14px; letter-spacing: -0.2px; }
+    .logo-sub { font-family: 'Fira Code', monospace; font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
 
     .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
     .nav-section-label {
+      font-family: 'Fira Code', monospace;
       font-size: 10px; font-weight: 600; color: var(--text-muted);
       text-transform: uppercase; letter-spacing: 0.8px;
       padding: 8px 8px 4px;
@@ -147,7 +148,7 @@
       border-bottom: 1px solid var(--border);
       background: var(--bg-sidebar);
     }
-    .topbar-title { font-size: 15px; font-weight: 600; flex: 1; }
+    .topbar-title { font-family: 'Fira Code', monospace; font-size: 15px; font-weight: 600; flex: 1; }
     .search-box {
       display: flex; align-items: center; gap: 8px;
       background: var(--bg-input); border: 1px solid var(--border);
@@ -182,7 +183,7 @@
     /* CONTENT */
     .content { flex: 1; overflow-y: auto; padding: 28px 28px 40px; }
     .page-header { margin-bottom: 24px; }
-    .page-greeting { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+    .page-greeting { font-family: 'Fira Code', monospace; font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
     .page-sub { color: var(--text-secondary); font-size: 13.5px; margin-top: 3px; }
 
     /* QUICK ACTIONS */
@@ -236,7 +237,7 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 16px 20px; border-bottom: 1px solid var(--border);
     }
-    .card-title { font-size: 13.5px; font-weight: 600; }
+    .card-title { font-family: 'Fira Code', monospace; font-size: 13.5px; font-weight: 600; }
     .card-link { font-size: 12px; color: var(--accent); cursor: pointer; }
     .card-link:hover { text-decoration: underline; }
 
@@ -356,7 +357,7 @@
       align-items: center; justify-content: center;
     }
     .chat-panel-icon svg { width: 14px; height: 14px; color: var(--accent); }
-    .chat-panel-title { font-size: 13.5px; font-weight: 600; flex: 1; }
+    .chat-panel-title { font-family: 'Fira Code', monospace; font-size: 13.5px; font-weight: 600; flex: 1; }
     .chat-ctx-badge {
       font-size: 10.5px; font-weight: 500; padding: 2px 8px;
       border-radius: 99px; background: var(--blue-subtle); color: var(--blue);
