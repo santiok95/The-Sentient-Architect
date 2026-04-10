@@ -1,5 +1,5 @@
 /**
- * middleware.ts
+ * proxy.ts
  * Route protection for all (dashboard) routes.
  *
  * Strategy: JWT is stored in localStorage (client-side only).
@@ -37,7 +37,7 @@ function isAuthRoute(pathname: string): boolean {
   )
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const authCookie = request.cookies.get(AUTH_COOKIE)
   const isLoggedIn = !!authCookie?.value

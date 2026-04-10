@@ -62,6 +62,8 @@ export function getHubConnection(hubName: HubName): HubConnection {
  * Safe to call multiple times.
  */
 export async function startHub(hubName: HubName): Promise<void> {
+  if (process.env.NEXT_PUBLIC_API_MOCK === 'true') return
+
   const connection = getHubConnection(hubName)
   if (
     connection.state === HubConnectionState.Disconnected ||
