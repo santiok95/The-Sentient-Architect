@@ -4,6 +4,7 @@ import { useTheme } from 'next-themes'
 import { usePathname } from 'next/navigation'
 import { Sun, Moon, Bell, MessageSquare, Menu, Search } from 'lucide-react'
 import { useUiStore } from '@/store/ui-store'
+import { cn } from '@/lib/utils'
 
 // ─── Path → title map ─────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ export function Topbar() {
   const toggleConsultantPanel = useUiStore((s) => s.toggleConsultantPanel)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const setCommandPaletteOpen = useUiStore((s) => s.setCommandPaletteOpen)
+  const convState = useUiStore((s) => s.hubStatus['conversation']?.state)
 
   return (
     <header className="flex items-center gap-3 h-14 px-4 border-b border-border bg-sidebar flex-shrink-0">
@@ -96,7 +98,13 @@ export function Topbar() {
       >
         <MessageSquare className="w-[15px] h-[15px]" />
         Consultant
-        <span className="w-1.5 h-1.5 rounded-full bg-[#a5f3a5] ml-0.5 animate-pulse" />
+        <span className={cn(
+          'w-1.5 h-1.5 rounded-full ml-0.5',
+          convState === 'Connected' && 'bg-emerald-400',
+          convState === 'Reconnecting' && 'bg-amber-400 animate-pulse',
+          convState === 'Connecting' && 'bg-sky-400 animate-pulse',
+          (!convState || convState === 'Disconnected' || convState === 'Disconnecting') && 'bg-red-400',
+        )} />
       </button>
     </header>
   )

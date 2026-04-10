@@ -13,6 +13,7 @@ import {
 import { SearchBar } from '@/features/brain/components/SearchBar'
 import { KnowledgeTable } from '@/features/brain/components/KnowledgeTable'
 import { IngestDialog } from '@/features/brain/components/IngestDialog'
+import { IngestProgress } from '@/features/brain/components/IngestProgress'
 
 const TYPE_OPTIONS = [
   { label: 'Todos los tipos', value: '' },
@@ -52,6 +53,9 @@ export function KnowledgeTableWrapper() {
           </Button>
         </div>
       </div>
+
+      {/* Real-time ingestion progress */}
+      <IngestProgress />
 
       {/* Table */}
       <KnowledgeTable searchTerm={searchTerm} typeFilter={typeFilter} />

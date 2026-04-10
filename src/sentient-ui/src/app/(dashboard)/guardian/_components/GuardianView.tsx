@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { SubmitRepoForm } from '@/features/guardian/components/SubmitRepoForm'
 import { AnalysisReport } from '@/features/guardian/components/AnalysisReport'
+import { AnalysisLiveLog } from '@/features/guardian/components/AnalysisLiveLog'
 import { useRepositories, type RepositorySummary } from '@/features/guardian/hooks/useRepositories'
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; className: string }> = {
@@ -85,6 +86,7 @@ function RepoCard({
 
 export function GuardianView() {
   const [activeKnowledgeItemId, setActiveKnowledgeItemId] = useState<string | null>(null)
+  const [activeRepoId, setActiveRepoId] = useState<string | null>(null)
   const { data, isLoading } = useRepositories()
 
   const repos = data?.items ?? []
@@ -118,10 +120,13 @@ export function GuardianView() {
                   <RepoCard
                     key={repo.id}
                     repo={repo}
-                    isActive={activeKnowledgeItemId === repo.knowledgeItemId}
+                    isActive={activeKnowledgeItemId === repo.knowledgeItemId || activeRepoId === repo.id}
                     onClick={() => {
+                      setActiveRepoId(repo.id)
                       if (repo.processingStatus === 'Completed') {
                         setActiveKnowledgeItemId(repo.knowledgeItemId)
+                      } else {
+                        setActiveKnowledgeItemId(null)
                       }
                     }}
                   />
@@ -130,7 +135,13 @@ export function GuardianView() {
       </div>
 
       {/* Right column: analysis */}
-      <div className="min-w-0">
+      <div className="min-w-0 space-y-4">
+        <AnalysisLiveLog
+          repositoryId={activeRepoId}
+          onComplete={() => setActiveKnowledgeItemId(
+            repos.find((r) => r.id === activeRepoId)?.knowledgeItemId ?? null
+          )}
+        />
         {activeKnowledgeItemId ? (
           <AnalysisReport knowledgeItemId={activeKnowledgeItemId} />
         ) : (

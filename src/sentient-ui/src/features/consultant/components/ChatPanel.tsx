@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ import {
   type ConversationMessage,
 } from '../hooks/useConversations'
 import { sendMessageAction } from '../actions'
+import { useHub } from '@/hooks/useHub'
 
 interface Props {
   conversationId: string | null
@@ -83,6 +84,11 @@ function TypingIndicator() {
 export function ChatPanel({ conversationId }: Props) {
   const [input, setInput] = useState('')
   const [optimisticMessages, setOptimisticMessages] = useState<ConversationMessage[]>([])
+  // Streaming state — one in-flight AI message at a time
+  const [streamingContent, setStreamingContent] = useState<string | null>(null)
+  // Buffer ref: accumulate chunks without triggering a re-render per token
+  const streamBufferRef = useRef('')
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
@@ -90,24 +96,75 @@ export function ChatPanel({ conversationId }: Props) {
   const { data: conversation, isLoading } = useConversation(conversationId)
   const messages = [...(conversation?.recentMessages ?? []), ...optimisticMessages]
 
+  // ── SignalR: conversation hub ──────────────────────────────────────────────
+  const handleReceiveChunk = useCallback((convId: string, token: string) => {
+    if (convId !== conversationId) return
+    streamBufferRef.current += token
+  }, [conversationId])
+
+  const handleReceiveComplete = useCallback((convId: string) => {
+    if (convId !== conversationId) return
+    // Flush remaining buffer and close stream
+    if (flushTimerRef.current) clearInterval(flushTimerRef.current)
+    flushTimerRef.current = null
+    setStreamingContent(null)
+    streamBufferRef.current = ''
+    setOptimisticMessages([])
+    queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(convId) })
+    queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+  }, [conversationId, queryClient])
+
+  const handleReceiveError = useCallback((convId: string, message: string) => {
+    if (convId !== conversationId) return
+    if (flushTimerRef.current) clearInterval(flushTimerRef.current)
+    flushTimerRef.current = null
+    setStreamingContent(null)
+    streamBufferRef.current = ''
+    setOptimisticMessages([])
+    toast.error(message ?? 'Error en la respuesta del agente')
+  }, [conversationId])
+
+  useHub('conversation', {
+    handlers: {
+      ReceiveMessageChunk: handleReceiveChunk as (...args: unknown[]) => void,
+      ReceiveComplete: handleReceiveComplete as (...args: unknown[]) => void,
+      ReceiveError: handleReceiveError as (...args: unknown[]) => void,
+    },
+  })
+
+  // Flush buffer to React state at ~16fps to batch micro-updates
+  useEffect(() => {
+    if (streamingContent === null) return
+    flushTimerRef.current = setInterval(() => {
+      if (streamBufferRef.current) {
+        setStreamingContent((prev) => (prev ?? '') + streamBufferRef.current)
+        streamBufferRef.current = ''
+      }
+    }, 60)
+    return () => {
+      if (flushTimerRef.current) clearInterval(flushTimerRef.current)
+    }
+  }, [streamingContent !== null]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const { execute, isPending } = useAction(sendMessageAction, {
-    onSuccess: ({ data }) => {
-      setOptimisticMessages([])
-      queryClient.invalidateQueries({
-        queryKey: CONVERSATION_KEYS.detail(conversationId ?? ''),
-      })
-      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+    onSuccess: () => {
+      // Don't invalidate yet — wait for ReceiveComplete from SignalR
+      // Start flush timer immediately so streaming content renders
+      streamBufferRef.current = ''
+      setStreamingContent('')
     },
     onError: ({ error }) => {
       setOptimisticMessages([])
+      setStreamingContent(null)
+      streamBufferRef.current = ''
       toast.error(error.serverError ?? 'Error al enviar el mensaje')
     },
   })
 
-  // Auto-scroll
+  // Auto-scroll on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, isPending])
+  }, [messages.length, isPending, streamingContent])
 
   function send() {
     const trimmed = input.trim()
@@ -178,7 +235,22 @@ export function ChatPanel({ conversationId }: Props) {
           ) : (
             messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
           )}
-          {isPending && <TypingIndicator />}
+          {/* Live streaming bubble — renders while AI is typing */}
+          {streamingContent !== null && (
+            <div className="flex gap-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
+                <Bot className="h-3.5 w-3.5" />
+              </div>
+              <div className="max-w-[80%] rounded-xl rounded-tl-sm border border-primary/30 bg-card px-4 py-2.5 text-sm leading-relaxed">
+                {streamingContent ? (
+                  <p className="whitespace-pre-wrap">{streamingContent}<span className="ml-0.5 inline-block h-3.5 w-0.5 bg-primary animate-pulse" /></p>
+                ) : (
+                  <TypingIndicator />
+                )}
+              </div>
+            </div>
+          )}
+          {isPending && streamingContent === null && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       </ScrollArea>

@@ -126,10 +126,11 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Integrations Test MSW | `tests/signalr` | 📋 | MSW para comprobar updates de estado al entrar eventos mockeados por SignalR. |
-| 1. Chat Streaming AI Tokens | `features/consultant/hooks/useConversation.ts` | 📋 | `ReceiveMessageChunk` -> Mutar estado del SignalR, no del React Formulario. |
-| 2. Progress Ingest Dashboard | `features/brain/components/IngestProgress.tsx` | 📋 | Recibir porcentaje de extracción y embeddings. |
-| 3. Health Analysis Live Log | `features/guardian/` | 📋 | Mostrar fases del escáner a medida que levanta issues. |
+| 0. Integrations Test SignalR | `__tests__/signalr/streaming.test.tsx` | ✅ | Hub stub (EventEmitter pattern). Tests: IngestProgress (5) + AnalysisLiveLog (5). |
+| 1. Chat Streaming AI Tokens | `features/consultant/components/ChatPanel.tsx`, `hooks/useHub.ts` | ✅ | `useHub` lifecycle hook + ref buffer + 60ms flush interval. Live bubble con cursor animado. |
+| 2. Progress Ingest Dashboard | `features/brain/components/IngestProgress.tsx` | ✅ | Wired en `KnowledgeTableWrapper`. Auto-dismiss 4s/6s. Estados: primary/emerald/destructive. |
+| 3. Health Analysis Live Log | `features/guardian/components/AnalysisLiveLog.tsx`, `GuardianView.tsx` | ✅ | Log monospace con timestamps. Filtrado por `repositoryId`. `onComplete` invalida cache. |
+| Connection Indicator | `components/shared/layout/Topbar.tsx` | ✅ | Dot real mapeado a `hubStatus['conversation']`: verde/ámbar/rojo/celeste según HubConnectionState. |
 
 ---
 
