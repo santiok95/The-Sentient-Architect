@@ -18,9 +18,7 @@ export const createConversationAction = authedActionClient
         Authorization: `Bearer ${ctx.token}`,
       },
       body: JSON.stringify({
-        // Map title → objective as per API contract
-        objective: parsedInput.title ?? 'Nueva consulta',
-        mode: parsedInput.mode,
+        title: parsedInput.title ?? 'Nueva consulta',
       }),
     })
     if (!res.ok) {
@@ -36,13 +34,13 @@ export const sendMessageAction = authedActionClient
   .schema(sendMessageSchema)
   .action(async ({ parsedInput, ctx }) => {
     const { conversationId, content, mode } = parsedInput
-    const res = await fetch(`${BASE_URL}/api/v1/conversations/${conversationId}/messages`, {
+    const res = await fetch(`${BASE_URL}/api/v1/conversations/${conversationId}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${ctx.token}`,
       },
-      body: JSON.stringify({ content, mode }),
+      body: JSON.stringify({ message: content }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

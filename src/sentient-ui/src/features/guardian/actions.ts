@@ -18,10 +18,8 @@ export const submitRepoAction = authedActionClient
         Authorization: `Bearer ${ctx.token}`,
       },
       body: JSON.stringify({
-        // Map repositoryUrl → gitUrl per API contract
-        gitUrl: parsedInput.repositoryUrl,
-        trustLevel: parsedInput.trustLevel,
-        notes: parsedInput.notes,
+        repositoryUrl: parsedInput.repositoryUrl,
+        trust: parsedInput.trustLevel,
       }),
     })
     if (!res.ok) {
@@ -43,7 +41,7 @@ export const reanalyzeAction = authedActionClient
   .schema(reanalyzeSchema)
   .action(async ({ parsedInput, ctx }) => {
     const res = await fetch(
-      `${BASE_URL}/api/v1/repositories/${parsedInput.knowledgeItemId}/reanalyze`,
+      `${BASE_URL}/api/v1/repositories/${parsedInput.knowledgeItemId}/analyze`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${ctx.token}` },

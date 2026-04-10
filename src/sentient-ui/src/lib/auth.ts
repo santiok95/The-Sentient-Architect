@@ -41,7 +41,7 @@ export function isAuthenticated(): boolean {
 export async function login(
   input: LoginInput,
 ): Promise<{ ok: true; session: AuthSession } | { ok: false; error: string }> {
-  const result = await apiClient.post<AuthSession>('/api/auth/login', input, {
+  const result = await apiClient.post<AuthSession>('/api/v1/auth/login', input, {
     skipAuth: true,
   })
 
@@ -60,7 +60,7 @@ export async function login(
 export async function register(
   input: RegisterInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const result = await apiClient.post('/api/auth/register', input, {
+  const result = await apiClient.post('/api/v1/auth/register', input, {
     skipAuth: true,
   })
   if (!result.ok) return { ok: false, error: result.error }
@@ -69,7 +69,7 @@ export async function register(
 
 export async function logout(): Promise<void> {
   try {
-    await apiClient.post('/api/auth/logout', {})
+    await apiClient.post('/api/v1/auth/logout', {})
   } finally {
     clearTokens()
     // Clear the server-action cookie
