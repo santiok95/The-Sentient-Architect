@@ -1,12 +1,17 @@
 'use client'
 
-import { X, MessageSquare, Send } from 'lucide-react'
+import { useState } from 'react'
+import { X, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUiStore, selectConsultantPanelOpen } from '@/store/ui-store'
+import { ChatPanel } from '@/features/consultant/components/ChatPanel'
+import { ConversationList } from '@/features/consultant/components/ConversationList'
 
 export function ConsultantPanel() {
   const isOpen = useUiStore(selectConsultantPanelOpen)
   const setConsultantPanelOpen = useUiStore((s) => s.setConsultantPanelOpen)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [view, setView] = useState<'chat' | 'list'>('chat')
 
   return (
     <aside
@@ -15,7 +20,6 @@ export function ConsultantPanel() {
       className={cn(
         'flex flex-col bg-sidebar border-l border-border h-screen',
         'transition-[width,min-width,opacity] duration-200',
-        // On xl+ screens: inline in flex flow. Below xl: absolute overlay.
         'xl:relative xl:h-auto',
         'max-xl:absolute max-xl:right-0 max-xl:top-0 max-xl:z-50',
         isOpen
@@ -31,8 +35,11 @@ export function ConsultantPanel() {
         <span className="font-mono text-[13.5px] font-semibold text-foreground flex-1">
           Consultant
         </span>
-        <button className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border-none cursor-pointer whitespace-nowrap">
-          Dashboard
+        <button
+          onClick={() => setView(view === 'chat' ? 'list' : 'chat')}
+          className="text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border-none cursor-pointer whitespace-nowrap"
+        >
+          {view === 'chat' ? 'Conversaciones' : 'Chat'}
         </button>
         <button
           onClick={() => setConsultantPanelOpen(false)}
@@ -43,42 +50,19 @@ export function ConsultantPanel() {
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-        {/* Welcome message */}
-        <div className="flex gap-2.5">
-          <div className="w-[26px] h-[26px] rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
-            SA
-          </div>
-          <div>
-            <div className="max-w-[85%] px-3 py-2.5 bg-card border border-border rounded-[4px_12px_12px_12px] text-[13px] leading-[1.55] text-foreground">
-              Hi! I&apos;m your Architecture Consultant. Ask me anything about your codebase,
-              design patterns, or tech decisions.
-            </div>
-            <div className="text-[10.5px] text-muted-foreground mt-1">Now</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Input area */}
-      <div className="p-3 border-t border-border flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground mb-2">
-          <MessageSquare className="w-3 h-3" />
-          Context: Dashboard · General
-        </div>
-        <div className="flex items-end gap-2 bg-input border border-border rounded-[10px] px-3 py-2 focus-within:border-primary transition-colors">
-          <textarea
-            placeholder="Ask the Consultant..."
-            rows={1}
-            className="flex-1 bg-transparent border-none outline-none text-foreground text-[13px] resize-none font-[inherit] leading-[1.5] max-h-[100px] placeholder:text-muted-foreground"
+      {/* Body */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {view === 'list' ? (
+          <ConversationList
+            activeId={activeId}
+            onSelect={(id) => {
+              setActiveId(id)
+              setView('chat')
+            }}
           />
-          <button
-            aria-label="Send message"
-            className="w-[30px] h-[30px] rounded-[7px] bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 hover:bg-primary/90 transition-colors"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        ) : (
+          <ChatPanel conversationId={activeId} />
+        )}
       </div>
     </aside>
   )

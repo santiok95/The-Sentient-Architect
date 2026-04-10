@@ -77,7 +77,7 @@ export const submitRepoSchema = z.object({
     .string()
     .url('URL inválida')
     .regex(githubRepoUrlRegex, 'Debe ser una URL válida de GitHub'),
-  trustLevel: z.enum(['External', 'Internal']).default('External'),
+  trustLevel: z.enum(['External', 'Internal']),
   notes: z.string().max(512).optional(),
 })
 

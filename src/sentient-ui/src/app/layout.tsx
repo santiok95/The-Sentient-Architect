@@ -3,6 +3,8 @@ import { Inter, Fira_Code } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Providers } from '@/components/shared/Providers'
+import { MSWProvider } from '@/components/shared/MSWProvider'
 import './globals.css'
 
 // ── Typography Stack (Design Guardrail #3) ────────────────────────────────────
@@ -50,7 +52,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <TooltipProvider>
-            {children}
+            <MSWProvider>
+              <Providers>
+                {children}
+              </Providers>
+            </MSWProvider>
             <Toaster richColors closeButton />
           </TooltipProvider>
         </ThemeProvider>

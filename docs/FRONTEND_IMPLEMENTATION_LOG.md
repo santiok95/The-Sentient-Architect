@@ -67,25 +67,49 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 ### 3A. Knowledge Brain
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Zod Validations Tests | `tests/features/brain` | 📋 | Unit tests para `ingestKnowledgeAction` garantizando error handling del Action. |
-| 1. Tabla de Conocimientos | `features/brain/components/KnowledgeTable.tsx` | 📋 | Uso de Tanstack Query. |
-| 2. Ingesta Híbrida (Action) | `features/brain/actions.ts` | 📋 | Server Action `ingestKnowledgeAction` validada con Zod. |
-| 3. Buscador Semántico RAG | `features/brain/components/SearchBar.tsx` | 📋 | POST hacia `/knowledge/search`. |
+| 0. Zod Validations Tests | `src/__tests__/features/brain.test.ts` | ✅ | 14 tests — ingestKnowledgeSchema, knowledgeSearchSchema, publishRequestSchema. 59/59 suite pasando. |
+| 1. Tabla de Conocimientos | `features/brain/components/KnowledgeTable.tsx` | ✅ | TanStack Query. Type badges, status dots, pagination, row actions (delete + publish dialog). |
+| 2. Ingesta Híbrida (Action) | `features/brain/actions.ts` | ✅ | `ingestKnowledgeAction` + `deleteKnowledgeAction` + `publishKnowledgeAction`. authedActionClient + Zod. |
+| 3. Buscador Semántico RAG | `features/brain/components/SearchBar.tsx` | ✅ | Debounce 400ms, POST `/api/v1/knowledge/search`, dropdown with results. |
+| 4. IngestDialog | `features/brain/components/IngestDialog.tsx` | ✅ | react-hook-form + zodResolver, tag manager, invalidates knowledge cache on success. |
+| 5. PublishDialog | `features/brain/components/PublishDialog.tsx` | ✅ | Reason textarea, publishKnowledgeAction wired. |
+| 6. Hook + Query Keys | `features/brain/hooks/useKnowledge.ts` | ✅ | useKnowledgeItems, useKnowledgeTags, useKnowledgeSearch, useInvalidateKnowledge. |
+| 7. Brain Page RSC | `app/(dashboard)/brain/page.tsx` | ✅ | RSC shell + KnowledgeTableWrapper (client). Brain icon + RAG badge. |
+| 8. Brain Ghost Loader | `app/(dashboard)/brain/loading.tsx` | ✅ | Skeleton mimics table layout (header + 8 rows + toolbar). |
+| 9. MSW Knowledge Handlers | `mocks/handlers/knowledge.handlers.ts` | ✅ | 5 rich mock items, v1 paths, filtering, fuzzy search, tags endpoint. |
 
 ### 3B. Architecture Consultant
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Unit Tests Actions | `tests/features/consultant`| 📋 | Tests del `sendMessageAction` validando Zod y mocks de error. |
-| 1. Estructura de Historial | `features/consultant/hooks/useConversations.ts`| 📋 | Fetch listado de conversaciones activas/archivadas. |
-| 2. Message Bubbles Render | `features/consultant/components/ChatPanel.tsx` | 📋 | Identidad visual (Fills diferentes User vs AI). Uso de Markdown. |
-| 3. Hybrid Chat Input (POST) | `features/consultant/actions.ts` | 📋 | Server Action `sendMessageAction` para inicio de comando al server. |
+| 0. Unit Tests Actions | `src/__tests__/features/consultant.test.ts` | ✅ | 10 tests — createConversationSchema + sendMessageSchema. |
+| 1. Estructura de Historial | `features/consultant/hooks/useConversations.ts` | ✅ | useConversations (list), useConversation (detail + messages). |
+| 2. Message Bubbles Render | `features/consultant/components/ChatPanel.tsx` | ✅ | User (bg-primary right) vs AI (bg-card left) bubbles. TypingIndicator (3-dot pulse). Auto-scroll. Optimistic messages. |
+| 3. Hybrid Chat Input (POST) | `features/consultant/actions.ts` | ✅ | `createConversationAction` (maps title→objective), `sendMessageAction`, `archiveConversationAction`. |
+| 4. Conversation List | `features/consultant/components/ConversationList.tsx` | ✅ | Groups Active/Anteriores. Archive on hover. New conversation button. |
+| 5. ConsultantPanel updated | `components/shared/layout/ConsultantPanel.tsx` | ✅ | Now renders ChatPanel + ConversationList (via view toggle) instead of static shell. |
+| 6. Consultant Page | `app/(dashboard)/consultant/page.tsx` | ✅ | Full-screen two-panel layout (list left, chat right) via ConsultantView client component. |
+| 7. Consultant Ghost Loader | `app/(dashboard)/consultant/loading.tsx` | ✅ | Skeleton matches two-panel layout. |
+| 8. MSW Conversation Handlers | `mocks/handlers/conversation.handlers.ts` | ✅ | 3 rich mock convs, v1 paths, message history. |
 
 ### 3C. Code Guardian
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Unit Tests Actions | `tests/features/guardian`| 📋 | Validar parseo de URLs de Github al disparar submits. |
-| 1. Reporte Visual de Stats | `features/guardian/components/AnalysisReport.tsx`| 📋 | Dashboard individual del Repo. |
-| 2. Repositorio SubmitAction | `features/guardian/actions.ts` | 📋 | Server action para enviar un repositorio al escáner. |
+| 0. Unit Tests Actions | `src/__tests__/features/guardian.test.ts` | ✅ | 7 tests — submitRepoSchema (GitHub URL regex, trustLevel defaults). |
+| 1. Reporte Visual de Stats | `features/guardian/components/AnalysisReport.tsx` | ✅ | 4 score gauges (Overall/Security/Quality/Maintainability) + findings table with severity badges. |
+| 2. Repositorio SubmitAction | `features/guardian/actions.ts` | ✅ | `submitRepoAction` (maps repositoryUrl→gitUrl) + `reanalyzeAction`. |
+| 3. Submit Form | `features/guardian/components/SubmitRepoForm.tsx` | ✅ | URL + trustLevel select + notes, react-hook-form + Zod, useAction. |
+| 4. Hooks | `features/guardian/hooks/useRepositories.ts` | ✅ | useRepositories, useRepositoryAnalysis, useFindings. |
+| 5. Guardian Page | `app/(dashboard)/guardian/page.tsx` | ✅ | Two-column grid: form+repo list left, AnalysisReport right. Click repo to view analysis. |
+| 6. Guardian Ghost Loader | `app/(dashboard)/guardian/loading.tsx` | ✅ | Two-column skeleton with gauge + table placeholders. |
+| 7. MSW Repository Handlers | `mocks/handlers/repository.handlers.ts` | ✅ | POST (202 queue), GET list, GET analysis (dotnet/aspire with scores), GET findings, POST reanalyze. |
+
+### Infrastructure Added in Phase 3
+| Item | File | Notes |
+|---|---|---|
+| QueryClientProvider | `components/shared/Providers.tsx` | Client boundary. staleTime 60s, retry 1. |
+| Safe Action clients | `lib/action-client.ts` | `actionClient` (public) + `authedActionClient` (reads `sa_token` cookie via next/headers). |
+| Auth cookie | `lib/auth.ts` | Login writes `sa_token` cookie (SameSite=Strict). Logout clears it. |
+| MSW handlers index | `mocks/handlers.ts` | Updated to include repositoryHandlers. |
 
 ### 3D. Trends Radar & 3E. Admin Panel
 | Tarea | Archivo(s) | Estado | Notas |

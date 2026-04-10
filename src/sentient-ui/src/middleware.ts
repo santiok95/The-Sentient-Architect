@@ -23,7 +23,7 @@ const PROTECTED_PATHS = [
 
 const AUTH_PATHS = ['/login', '/register']
 
-const AUTH_COOKIE = 'sa_auth'
+const AUTH_COOKIE = 'sa_token'
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PATHS.some(

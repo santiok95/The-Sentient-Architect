@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { LoginForm } from './_components/LoginForm'
 
 export const metadata: Metadata = { title: 'Sign In' }
 
@@ -34,35 +33,9 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs font-medium">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                name="email"
-                placeholder="dev@example.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs font-medium">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                autoComplete="current-password"
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" size="sm">
-              Sign In
-            </Button>
+            <Suspense>
+              <LoginForm />
+            </Suspense>
           </CardContent>
           <CardFooter className="justify-center pt-0">
             <p className="text-xs text-muted-foreground">

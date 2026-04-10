@@ -48,6 +48,12 @@ export async function login(
   if (!result.ok) return { ok: false, error: result.error }
 
   saveTokens(result.data.token, result.data.refreshToken)
+
+  // Write sa_token cookie so Server Actions (next-safe-action) can read it.
+  // Not httpOnly (client-written), but SameSite=Strict limits CSRF exposure.
+  const expirySeconds = result.data.expiresIn ?? 3600
+  document.cookie = `sa_token=${result.data.token}; path=/; SameSite=Strict; max-age=${expirySeconds}`
+
   return { ok: true, session: result.data }
 }
 
@@ -66,5 +72,7 @@ export async function logout(): Promise<void> {
     await apiClient.post('/api/auth/logout', {})
   } finally {
     clearTokens()
+    // Clear the server-action cookie
+    document.cookie = 'sa_token=; path=/; SameSite=Strict; max-age=0'
   }
 }
