@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using static SentientArchitect.Application.Common.Results.ErrorType;
 
 namespace SentientArchitect.Application.Features.Conversations.GetConversationDetail;
 
@@ -11,14 +12,15 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
         CancellationToken ct = default)
     {
         var conversation = await db.Conversations
-            .Include(c => c.Messages.OrderBy(m => m.CreatedAt))
+            .Include(c => c.Messages)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId, ct);
 
         if (conversation is null)
-            return Result<GetConversationDetailResponse>.Failure("Conversation not found");
+            return Result<GetConversationDetailResponse>.Failure(["Conversation not found."], ErrorType.NotFound);
 
         var messages = conversation.Messages
+            .OrderBy(m => m.CreatedAt)
             .Select(m => new ConversationMessageDto(
                 m.Id,
                 m.Role.ToString(),

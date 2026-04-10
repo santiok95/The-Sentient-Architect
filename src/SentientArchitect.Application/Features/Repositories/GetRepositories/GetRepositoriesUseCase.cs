@@ -25,6 +25,6 @@ public class GetRepositoriesUseCase(IApplicationDbContext db)
                 r.Reports.Count))
             .ToList();
 
-        return Result<GetRepositoriesResponse>.SuccessWith(new GetRepositoriesResponse(items));
+        return Result<GetRepositoriesResponse>.SuccessWith(new GetRepositoriesResponse(items, items.Count));
     }
 }

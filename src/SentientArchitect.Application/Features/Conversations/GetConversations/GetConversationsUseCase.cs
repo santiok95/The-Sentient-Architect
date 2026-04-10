@@ -12,13 +12,21 @@ public class GetConversationsUseCase(IApplicationDbContext db)
     {
         var conversations = await db.Conversations
             .Where(c => c.UserId == request.UserId)
+            .Include(c => c.Messages)
             .AsNoTracking()
             .ToListAsync(ct);
 
         var summaries = conversations
-            .Select(c => new ConversationSummary(c.Id, c.Title, c.Status, c.TokenCount, c.UpdatedAt))
+            .Select(c => new ConversationSummary(
+                c.Id,
+                c.Title,
+                c.ContextMode.ToString(),
+                c.Status.ToString(),
+                c.Messages.Count,
+                c.CreatedAt,
+                c.UpdatedAt))
             .ToList();
 
-        return Result<GetConversationsResponse>.SuccessWith(new GetConversationsResponse(summaries));
+        return Result<GetConversationsResponse>.SuccessWith(new GetConversationsResponse(summaries, summaries.Count));
     }
 }

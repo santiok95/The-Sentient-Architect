@@ -4,9 +4,11 @@ namespace SentientArchitect.Application.Features.Conversations.GetConversations;
 
 public record ConversationSummary(
     Guid Id,
-    string Title,
-    ConversationStatus Status,
-    int TokenCount,
+    string Objective,
+    string Mode,
+    string Status,
+    int MessageCount,
+    DateTime CreatedAt,
     DateTime UpdatedAt);
 
-public record GetConversationsResponse(List<ConversationSummary> Conversations);
+public record GetConversationsResponse(List<ConversationSummary> Items, int TotalCount);

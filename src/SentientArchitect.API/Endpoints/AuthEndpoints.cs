@@ -88,7 +88,6 @@ public class AuthEndpoints : IEndpointModule
         .WithName("Login")
         .WithOpenApi()
         .AllowAnonymous();
-    }
 
         group.MapPost("/refresh", async (
             [FromBody] RefreshRequest body,
@@ -129,15 +128,13 @@ public class AuthEndpoints : IEndpointModule
             if (user is null || !user.IsActive)
                 return Results.Unauthorized();
 
-            var roles     = await userManager.GetRolesAsync(user);
-            var newToken  = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
-            var expiresAt = DateTime.UtcNow.AddDays(7);
+            var roles    = await userManager.GetRolesAsync(user);
+            var newToken = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
 
             return Results.Ok(new
             {
                 token        = newToken,
-                refreshToken = newToken, // same token acts as next refresh credential
-                expiresAt,
+                refreshToken = newToken,
             });
         })
         .WithName("RefreshToken")
