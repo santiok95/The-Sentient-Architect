@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SentientArchitect.Domain\SentientArchitect.Domain.csproj" />
     <ProjectReference Include="..\..\src\SentientArchitect.Application\SentientArchitect.Application.csproj" />
+    <ProjectReference Include="..\..\src\SentientArchitect.Infrastructure\SentientArchitect.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -51,6 +51,57 @@ _Coming soon — currently in architecture and design phase._
 
 See the `docs/` folder for detailed architecture decisions, entity models, and implementation progress.
 
+## Chat Agent Routing and Context Modes
+
+Endpoint:
+
+```http
+POST /api/v1/conversations/<CONVERSATION_ID>/chat
+Authorization: Bearer <TOKEN_USER>
+Content-Type: application/json
+```
+
+### `agentType`
+
+- `Knowledge` (default): answers using retrieved project knowledge and sends content via SignalR tokens.
+- `Consultant`: provides architecture guidance using user profile, conversation summary, knowledge rules, and repository context.
+
+### `contextMode` (used by `Consultant`)
+
+- `Auto`: if no `activeRepositoryId` and no `preferredStack`, the assistant may ask a clarification question first.
+- `RepoBound`: anchors recommendations to the selected analyzed repository (`activeRepositoryId`).
+- `StackBound`: prioritizes `preferredStack` and avoids forcing conventions from a different stack.
+- `Generic`: keeps advice stack-agnostic and not repository-specific.
+
+### Context Resolution Order
+
+1. Values sent in the current request.
+2. Values already persisted in the conversation.
+3. Fallback defaults (`Knowledge` for `agentType`, `Auto` for `contextMode` in consultant flow).
+
+### Example Requests
+
+Clarification-first behavior (`Auto` with missing context):
+
+```json
+{
+	"message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
+	"agentType": "Consultant",
+	"contextMode": "Auto"
+}
+```
+
+Direct stack-constrained answer:
+
+```json
+{
+	"message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
+	"agentType": "Consultant",
+	"contextMode": "StackBound",
+	"preferredStack": "Java + Spring Boot"
+}
+```
+
 ## License
 
 _TBD_

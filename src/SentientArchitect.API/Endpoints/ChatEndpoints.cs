@@ -5,6 +5,7 @@ using SentientArchitect.API.Extensions;
 using SentientArchitect.API.Hubs;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Conversations.Chat;
+using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -26,11 +27,20 @@ public class ChatEndpoints : IEndpointModule
         {
             var userId = userAccessor.GetCurrentUserId();
             var groupName = conversationId.ToString();
+            var streamedAnyToken = false;
 
             var result = await executeChatUseCase.ExecuteAsync(
-                new ExecuteChatRequest(conversationId, userId, body.Message, body.AgentType),
+                new ExecuteChatRequest(
+                    conversationId,
+                    userId,
+                    body.Message,
+                    body.AgentType,
+                    body.ActiveRepositoryId,
+                    body.PreferredStack,
+                    body.ContextMode),
                 async (token, tokenCt) =>
                 {
+                    streamedAnyToken = true;
                     await hubContext.Clients.Group(groupName)
                         .SendAsync("ReceiveToken", token, cancellationToken: tokenCt);
                 },
@@ -44,6 +54,14 @@ public class ChatEndpoints : IEndpointModule
                 return result.ToHttpResult();
             }
 
+            if (!streamedAnyToken &&
+                result.Data is not null &&
+                !string.IsNullOrWhiteSpace(result.Data.AssistantMessage))
+            {
+                await hubContext.Clients.Group(groupName)
+                    .SendAsync("ReceiveToken", result.Data.AssistantMessage, ct);
+            }
+
             await hubContext.Clients.Group(groupName).SendAsync("ReceiveComplete", ct);
 
             return result.ToHttpResult();
@@ -52,5 +70,10 @@ public class ChatEndpoints : IEndpointModule
         .WithOpenApi();
     }
 
-    private record ChatRequest(string Message, string AgentType = "Knowledge");
+    private record ChatRequest(
+        string Message,
+        string AgentType = "Knowledge",
+        Guid? ActiveRepositoryId = null,
+        string? PreferredStack = null,
+        ConsultantContextMode? ContextMode = null);
 }

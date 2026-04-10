@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +43,7 @@ public sealed class CodeAnalyzer(
             // Clone repository
             clonePath = Path.Combine(Path.GetTempPath(), "sentient-repos", repositoryInfoId.ToString());
             if (Directory.Exists(clonePath))
-                Directory.Delete(clonePath, true);
+                DeleteDirectory(clonePath);
 
             LibGit2Sharp.Repository.Clone(repositoryInfo.RepositoryUrl, clonePath);
 
@@ -153,6 +154,10 @@ public sealed class CodeAnalyzer(
                 }
             }
 
+            // ── Architectural pattern detection (aggregate over all files) ────────
+            var architectureFindings = await DetectArchitecturalPatternsAsync(csFiles, report.Id, ct);
+            findings.AddRange(architectureFindings);
+
             // Security scan for external repos
             if (repositoryInfo.Trust == RepositoryTrust.External)
             {
@@ -201,11 +206,31 @@ public sealed class CodeAnalyzer(
 
             await db.SaveChangesAsync(ct);
 
-            // Cleanup
+            // Cleanup must not invalidate a successfully completed analysis report.
             if (Directory.Exists(clonePath))
-                Directory.Delete(clonePath, true);
+            {
+                try
+                {
+                    DeleteDirectory(clonePath);
+                }
+                catch (Exception cleanEx)
+                {
+                    logger.LogWarning(cleanEx,
+                        "Analysis completed but cleanup failed for repository {RepositoryInfoId}.",
+                        repositoryInfoId);
+                }
+            }
 
-            await reporter.ReportCompleteAsync(repositoryInfoId, report.Id, ct);
+            try
+            {
+                await reporter.ReportCompleteAsync(repositoryInfoId, report.Id, ct);
+            }
+            catch (Exception reportEx)
+            {
+                logger.LogWarning(reportEx,
+                    "Analysis completed but SignalR completion notification failed for repository {RepositoryInfoId}.",
+                    repositoryInfoId);
+            }
 
             logger.LogInformation("Analysis completed for repository {RepositoryInfoId}. Report: {ReportId}. {Summary}",
                 repositoryInfoId, report.Id, summary);
@@ -213,6 +238,13 @@ public sealed class CodeAnalyzer(
         catch (Exception ex)
         {
             logger.LogError(ex, "Analysis failed for repository {RepositoryInfoId}.", repositoryInfoId);
+
+            // If the report is already completed, do not overwrite it to Failed due to
+            // post-processing errors (cleanup/notifications).
+            if (report?.Status == AnalysisStatus.Completed)
+            {
+                return;
+            }
 
             if (report is not null)
             {
@@ -238,9 +270,233 @@ public sealed class CodeAnalyzer(
 
             if (clonePath is not null && Directory.Exists(clonePath))
             {
-                try { Directory.Delete(clonePath, true); }
+                try { DeleteDirectory(clonePath); }
                 catch (Exception cleanEx) { logger.LogWarning(cleanEx, "Failed to clean up clone directory."); }
             }
         }
+    }
+
+    // ── Architectural pattern detection ───────────────────────────────────────
+
+    /// <summary>
+    /// Scans all C# source files for architectural patterns (Repository, direct-DbContext,
+    /// Minimal API, MVC Controllers, MediatR, Vertical Slice, Clean Architecture layers)
+    /// and returns Architecture-category findings the Consultant Agent can use as context.
+    /// </summary>
+    internal static async Task<List<AnalysisFinding>> DetectArchitecturalPatternsAsync(
+        string[] csFiles,
+        Guid reportId,
+        CancellationToken ct)
+    {
+        var repoInterfaces   = new HashSet<string>(StringComparer.Ordinal);
+        var repoClasses      = new HashSet<string>(StringComparer.Ordinal);
+        var dbContextFiles   = new HashSet<string>(StringComparer.Ordinal);
+        var mediatorFiles    = new HashSet<string>(StringComparer.Ordinal);
+        var minimalApiFiles  = new HashSet<string>(StringComparer.Ordinal);
+        var controllerFiles  = new HashSet<string>(StringComparer.Ordinal);
+        var featureFolderFiles = new HashSet<string>(StringComparer.Ordinal);
+
+        var repoIfacePattern  = new Regex(@"^I\w+Repository$",  RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        var repoClassPattern  = new Regex(@"Repository$",       RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        var mediatorNames     = new HashSet<string>(StringComparer.Ordinal) { "IMediator", "ISender", "IRequestHandler" };
+        var minimalApiMethods = new HashSet<string>(StringComparer.Ordinal)
+            { "MapGet", "MapPost", "MapPut", "MapDelete", "MapPatch", "MapGroup", "MapEndpoints" };
+
+        foreach (var filePath in csFiles)
+        {
+            try
+            {
+                var code = await File.ReadAllTextAsync(filePath, ct);
+                var root = await CSharpSyntaxTree.ParseText(code).GetRootAsync(ct);
+
+                foreach (var node in root.DescendantNodes())
+                {
+                    // Repository interface: interface IXxxRepository
+                    if (node is InterfaceDeclarationSyntax iface &&
+                        repoIfacePattern.IsMatch(iface.Identifier.Text))
+                    {
+                        repoInterfaces.Add(filePath);
+                    }
+
+                    // Repository class: class XxxRepository (but not built-in domain words)
+                    if (node is ClassDeclarationSyntax cls &&
+                        repoClassPattern.IsMatch(cls.Identifier.Text) &&
+                        cls.Identifier.Text is not ("RepositoryInfo" or "RepositoryTrust"))
+                    {
+                        repoClasses.Add(filePath);
+                    }
+
+                    // Direct DbContext/IApplicationDbContext injection —
+                    // handles both traditional constructors and C# 12 primary constructors.
+                    if (node is ConstructorDeclarationSyntax ctor)
+                    {
+                        foreach (var param in ctor.ParameterList.Parameters)
+                        {
+                            var typeName = param.Type?.ToString() ?? string.Empty;
+                            if (typeName.EndsWith("Context", StringComparison.Ordinal) ||
+                                typeName.StartsWith("IApplicationDbContext", StringComparison.Ordinal))
+                            {
+                                dbContextFiles.Add(filePath);
+                                break;
+                            }
+                        }
+                    }
+
+                    // Primary constructor syntax (C# 12): class Foo(AppDbContext db)
+                    if (node is ClassDeclarationSyntax primaryCtorCls &&
+                        primaryCtorCls.ParameterList is { Parameters.Count: > 0 } primaryParams)
+                    {
+                        foreach (var param in primaryParams.Parameters)
+                        {
+                            var typeName = param.Type?.ToString() ?? string.Empty;
+                            if (typeName.EndsWith("Context", StringComparison.Ordinal) ||
+                                typeName.StartsWith("IApplicationDbContext", StringComparison.Ordinal))
+                            {
+                                dbContextFiles.Add(filePath);
+                                break;
+                            }
+                        }
+                    }
+
+                    // MediatR / CQRS
+                    if (node is IdentifierNameSyntax id && mediatorNames.Contains(id.Identifier.Text))
+                        mediatorFiles.Add(filePath);
+
+                    // Minimal API
+                    if (node is InvocationExpressionSyntax inv)
+                    {
+                        var methodName = (inv.Expression as MemberAccessExpressionSyntax)
+                                         ?.Name.Identifier.Text ?? string.Empty;
+                        if (minimalApiMethods.Contains(methodName))
+                            minimalApiFiles.Add(filePath);
+                    }
+
+                    // MVC Controllers
+                    if (node is ClassDeclarationSyntax ctrlCls)
+                    {
+                        var hasAttr = ctrlCls.AttributeLists
+                            .SelectMany(a => a.Attributes)
+                            .Any(a => a.Name.ToString() is "ApiController" or "Controller");
+
+                        var inherits = ctrlCls.BaseList?.Types
+                            .Any(t => t.Type.ToString() is "ControllerBase" or "Controller") ?? false;
+
+                        if (hasAttr || inherits)
+                            controllerFiles.Add(filePath);
+                    }
+                }
+
+                // Vertical Slice / Feature folder organisation (path heuristic)
+                if (filePath.Contains("/Features/", StringComparison.OrdinalIgnoreCase) ||
+                    filePath.Contains(@"\Features\", StringComparison.OrdinalIgnoreCase))
+                {
+                    featureFolderFiles.Add(filePath);
+                }
+            }
+            catch
+            {
+                // Tolerate parse failures — don't abort the whole detection pass
+            }
+        }
+
+        var findings = new List<AnalysisFinding>();
+
+        // Repository pattern
+        if (repoInterfaces.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Repository pattern detected: {repoInterfaces.Count} IXxxRepository interface(s). " +
+                "NOTE: if the codebase also uses direct DbContext injection, " +
+                "adding more repository abstractions contradicts the established convention."));
+        }
+
+        if (repoClasses.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Repository class implementations detected ({repoClasses.Count} file(s)). " +
+                "Verify whether this is intentional or conflicts with a direct-DbContext convention."));
+        }
+
+        // Direct DbContext injection (no repo layer)
+        if (dbContextFiles.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Direct DbContext/IApplicationDbContext injection used in {dbContextFiles.Count} file(s). " +
+                "This codebase injects the DbContext directly — " +
+                "do NOT recommend adding a repository abstraction layer on top."));
+        }
+
+        // MediatR / CQRS
+        if (mediatorFiles.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"MediatR/CQRS pattern detected ({mediatorFiles.Count} file(s) reference IMediator/ISender). " +
+                "Architecture recommendations should align with command/query separation."));
+        }
+
+        // API style
+        if (minimalApiFiles.Count > 0 && controllerFiles.Count == 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Minimal API endpoints detected ({minimalApiFiles.Count} file(s)). " +
+                "This project uses Minimal API — do NOT recommend switching to MVC Controllers."));
+        }
+        else if (controllerFiles.Count > 0 && minimalApiFiles.Count == 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"MVC Controller pattern detected ({controllerFiles.Count} controller(s)). " +
+                "Recommendations should be consistent with the existing Controller-based approach."));
+        }
+        else if (controllerFiles.Count > 0 && minimalApiFiles.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Mixed API style: {minimalApiFiles.Count} Minimal API file(s) and {controllerFiles.Count} Controller(s). " +
+                "Consider standardising on one approach."));
+        }
+
+        // Vertical Slice / Feature folder
+        if (featureFolderFiles.Count > 0)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Vertical Slice / Feature-folder organisation detected ({featureFolderFiles.Count} file(s) under a 'Features' folder). " +
+                "Architecture advice should preserve this organisation."));
+        }
+
+        // Clean Architecture layers (path heuristic)
+        var layerKeywords = new[] { "Domain", "Application", "Infrastructure", "Data" };
+        var detectedLayers = layerKeywords
+            .Where(layer => csFiles.Any(f =>
+                f.Contains($"{Path.DirectorySeparatorChar}{layer}{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ||
+                f.Contains($"/{layer}/", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (detectedLayers.Count >= 3)
+        {
+            findings.Add(new AnalysisFinding(
+                reportId, FindingSeverity.Info, "Architecture",
+                $"Clean Architecture layer structure detected: [{string.Join(", ", detectedLayers)}]. " +
+                "Respect the existing layer boundaries in all recommendations."));
+        }
+
+        return findings;
+    }
+
+    private static void DeleteDirectory(string targetDir)
+    {
+        if (string.IsNullOrWhiteSpace(targetDir) || !Directory.Exists(targetDir)) return;
+
+        foreach (var file in Directory.GetFiles(targetDir, "*.*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+        Directory.Delete(targetDir, true);
     }
 }

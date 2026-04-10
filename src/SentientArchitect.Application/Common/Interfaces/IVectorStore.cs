@@ -10,7 +10,8 @@ public interface IVectorStore
     Task<IReadOnlyList<VectorSearchResult>> SearchSimilarAsync(
         float[] queryEmbedding, Guid userId, Guid tenantId,
         int topK = 5, float minimumScore = 0.7f,
-        bool includeShared = true, CancellationToken ct = default);
+        bool includeShared = true, bool includeAllScopes = false,
+        CancellationToken ct = default);
 
     Task DeleteByKnowledgeItemAsync(Guid knowledgeItemId, CancellationToken ct = default);
 }

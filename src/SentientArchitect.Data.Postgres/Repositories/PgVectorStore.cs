@@ -28,8 +28,11 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
         int topK = 5,
         float minimumScore = 0.7f,
         bool includeShared = true,
+        bool includeAllScopes = false,
         CancellationToken ct = default)
     {
+        var includeAllTenants = includeAllScopes || tenantId == Guid.Empty;
+
         // The Embedding property is stored as float[] with a ValueConverter → Pgvector.Vector.
         // EF Core's LINQ translator works on the CLR type (float[]), so the Pgvector EF extension
         // instance methods (.CosineDistance(), .L2Distance(), etc.) cannot be used in LINQ —
@@ -53,6 +56,9 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
         // The <=> operator is pgvector cosine distance.
         // NpgsqlParameter is used to safely bind the vector value.
         var vectorParam = new NpgsqlParameter("queryVector", queryVector);
+        var userIdParam = new NpgsqlParameter("userId", userId);
+        var tenantIdParam = new NpgsqlParameter("tenantId", tenantId);
+        var includeSharedParam = new NpgsqlParameter("includeShared", includeShared);
 
         // fetchCount is a compile-time-bounded int (topK * 3), never from user input — no injection risk.
 #pragma warning disable EF1002
@@ -61,10 +67,18 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
                 $"""
                 SELECT ke."Id"
                 FROM   "KnowledgeEmbeddings" ke
+                INNER JOIN "KnowledgeItems" ki ON ki."Id" = ke."KnowledgeItemId"
+                     WHERE  @includeAllScopes = TRUE
+                         OR ki."UserId" = @userId
+                         OR (@includeShared = TRUE AND ki."TenantId" = @tenantId AND ki."TenantId" <> @userId)
                 ORDER BY ke."Embedding" <=> @queryVector
                 LIMIT  {fetchCount}
                 """,
-                vectorParam)
+                vectorParam,
+                userIdParam,
+                tenantIdParam,
+                     new NpgsqlParameter("includeAllScopes", includeAllTenants),
+                includeSharedParam)
             .ToListAsync(ct);
 #pragma warning restore EF1002
 
@@ -77,7 +91,8 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
             .Include(e => e.KnowledgeItem)
             .Where(e =>
                 rawOrderedIds.Contains(e.Id) &&
-                (e.KnowledgeItem!.UserId == userId ||
+                (includeAllTenants ||
+                 e.KnowledgeItem!.UserId == userId ||
                  (includeShared && e.KnowledgeItem.TenantId == tenantId && e.KnowledgeItem.TenantId != userId)))
             .AsNoTracking()
             .ToListAsync(ct);

@@ -334,11 +334,62 @@ Content-Type: application/json
 
 {
   "message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
-  "agentType": "Consultant"
+  "agentType": "Consultant",
+  "contextMode": "Auto"
 }
 ```
 
-**Esperado:** Similar al anterior — tokens por SignalR con respuesta del agente consultor.
+**Esperado:**
+- Si falta contexto (repo activo/stack), el Consultant puede responder primero con una pregunta de clarificación.
+- Si ya se define contexto, responde arquitectura directamente por tokens SignalR.
+- En `RepoBound`, no debe empujar migración por defecto; solo puede sugerirla con justificación explícita por constraints no funcionales (p. ej. concurrencia extrema, SLO/latencia, throughput u operación).
+
+Ejemplo con contexto explícito (evita ida y vuelta):
+
+```json
+{
+  "message": "Necesito diseñar un sistema de notificaciones para 100k usuarios",
+  "agentType": "Consultant",
+  "contextMode": "StackBound",
+  "preferredStack": "Java + Spring Boot"
+}
+```
+
+Valores válidos para `contextMode`: `Auto`, `RepoBound`, `StackBound`, `Generic`.
+
+#### Semántica rápida para QA
+
+- `agentType: Knowledge`: responde con base en knowledge retrieval del proyecto.
+- `agentType: Consultant`: responde con contexto de perfil, resumen de conversación, reglas y repositorio.
+- `contextMode: Auto`: si falta contexto fuerte (`activeRepositoryId` o `preferredStack`) puede pedir clarificación primero.
+- `contextMode: RepoBound`: prioriza patrones del repo analizado indicado por `activeRepositoryId`.
+- `contextMode: StackBound`: prioriza `preferredStack` para recomendaciones de arquitectura.
+- `contextMode: Generic`: recomendaciones generales no atadas a repo específico.
+
+#### Matriz mínima de pruebas recomendada
+
+1. `Knowledge` sin `contextMode`:
+  - Request: `agentType = Knowledge`.
+  - Esperado: respuesta por `ReceiveToken` + `ReceiveComplete` sin pregunta de clarificación.
+2. `Consultant + Auto` sin `activeRepositoryId` y sin `preferredStack`:
+  - Request: `agentType = Consultant`, `contextMode = Auto`.
+  - Esperado: puede devolver pregunta de clarificación primero, incluyendo intención cuando hay conflicto (optimizar repo actual, coexistencia/híbrido o migración completa).
+3. `Consultant + StackBound`:
+  - Request: `contextMode = StackBound`, `preferredStack = "Java + Spring Boot"`.
+  - Esperado: respuesta directa de arquitectura, sin clarificación inicial.
+4. `Consultant + RepoBound`:
+  - Request: `contextMode = RepoBound`, `activeRepositoryId = <REPO_ID>`.
+  - Esperado: recomendaciones ancladas al repositorio analizado, sin empujar migración salvo evidencia de mismatch no funcional.
+5. `Consultant + Generic` con stack explícito:
+  - Request: `contextMode = Generic`, `preferredStack = "Java + Spring Boot"`.
+  - Esperado: recomendación principal y ejemplos de código en Java/Spring; otros stacks solo como alternativa explícita con trade-offs.
+6. `Consultant + RepoBound` con presión extrema de concurrencia:
+  - Request: incluir objetivo explícito de alta concurrencia (p. ej. decenas de miles de requests concurrentes y SLO agresivo).
+  - Esperado: puede recomendar alternativa de stack si está justificada, pero debe explicar evidencia y ofrecer al menos una mitigación dentro del stack actual antes de migrar.
+7. Persistencia de contexto por conversación:
+  - Primer request: enviar `contextMode` + `preferredStack` o `activeRepositoryId`.
+  - Segundo request: omitir esos campos.
+  - Esperado: el comportamiento mantiene el contexto ya guardado en la conversación.
 
 ### Test 4.4: Chat en conversación inexistente
 
@@ -436,8 +487,12 @@ Authorization: Bearer <TOKEN_USER>
 }
 ```
 
-> Sin API key de OpenAI, `results` estará vacío (NullEmbeddingService retorna embeddings nulos).
-
+> **🚨 TIPS DE TROUBLESHOOTING - SEARCH DEVUELVE 0 RESULTADOS:**
+> 
+> Si al buscar te devuelve `"results": [], "totalFound": 0` a pesar de saber que tenés artículos cargados en tu base de datos:
+> 1. **Vectores Inexistentes:** Fijate *cuándo* se crearon esos registros. Si la data (`KnowledgeItems`) se ingestó **ANTES** de que configures tu `AI:OpenAI:ApiKey` en el backend, la capa de infraestructura usó el `NullEmbeddingService`. Es decir, la tabla tiene el texto pero no hay vectores en `KnowledgeEmbeddings`.
+> 2. **Solución:** Tenés que ingestar la data de nuevo ahora que sí tenés las claves habilitadas.
+> 3. **Verificación visual del costo:** En la respuesta del `POST` a `/api/v1/knowledge` vas a ver `"chunksCreated": 1`. Y si vas al dashboard de OpenAI y el uso te marca `< $0.01`... ¡Es normal! El modelo `text-embedding-3-small` es tan barato (~$0.02 el millón de tokens) que procesar artículos cortos no mueve la aguja en el dashboard, pero el `score` de similitud que devuelve la búsqueda (ej: `0.637`) es la prueba viviente de que funciona maravillosamente.
 ### Test 5.5: Eliminar knowledge item
 
 ```http
@@ -468,7 +523,7 @@ Authorization: Bearer <TOKEN_USER>
 Content-Type: application/json
 
 {
-  "repositoryUrl": "https://github.com/dotnet/aspnetcore",
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git",
   "trust": 1
 }
 ```
@@ -477,10 +532,15 @@ Content-Type: application/json
 ```json
 {
   "repositoryId": "<GUID>",
-  "repositoryUrl": "https://github.com/dotnet/aspnetcore"
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git"
 }
 ```
 > Guardar `repositoryId` como `REPO_ID`. Nota: para una prueba más rápida, usar un repo chico.
+
+{
+  "repositoryId": "019d6db5-22a5-7739-a800-575f34d699e7",
+  "repositoryUrl": "https://github.com/dotnet/aspnetcore.git"
+}
 
 ### Test 6.2: Listar repositorios
 
@@ -491,16 +551,21 @@ Authorization: Bearer <TOKEN_USER>
 
 **Esperado:** `200 OK` con el repositorio registrado.
 
-### Test 6.3: Conectar a SignalR de análisis
+### Test 6.3: Conectar a SignalR de análisis (Progreso en tiempo real)
 
-```
-URL: wss://localhost:7242/hubs/analysis?access_token=<TOKEN_USER>
-```
+Para probar SignalR, lo ideal es usar **Postman** (que ahora tiene soporte nativo para SignalR).
 
-Invocar:
-```json
-{ "type": 1, "target": "JoinRepository", "arguments": ["<REPO_ID>"] }
-```
+**Pasos en Postman:**
+1. Hacé click en "New" -> "WebSocket" y elegí la pestaña **SignalR**.
+2. En la URL poné: `wss://localhost:7242/hubs/analysis?access_token=<TOKEN_USER>`
+   *(Fijate que es `wss://` y que le pasamos el token por querystring porque los WebSockets en el navegador no soportan mandar headers custom).*
+3. Hacé click en **Connect**.
+4. Una vez conectado, tenés que suscribirte al grupo del repositorio para recibir sus eventos. Para esto mandá el siguiente evento de Invocación desde la pestaña "Messages":
+   - **Target:** `JoinRepository`
+   - **Arguments:** `["<REPO_ID>"]` (Acá va el GUID del repo que creaste en el paso 6.1)
+
+> **Nota técnica (si usás un cliente WebSocket pelado sin soporte SignalR):**
+> Vas a tener que mandar primero el handshake de inicio: `{"protocol":"json","version":1} (terminado con el byte 0x1E)`. Y luego tu mensaje `{ "type": 1, "target": "JoinRepository", "arguments": ["<REPO_ID>"] }` seguido también por el carácter especial `0x1E` (Record Separator) para que el servidor entienda que ahí terminó la trama.
 
 ### Test 6.4: Disparar análisis
 
@@ -590,14 +655,28 @@ GET /api/v1/trends/<TREND_ID>/snapshots
 
 > Usar `TOKEN_ADMIN` para estos tests.
 
-### Test 8.1: Listar publish requests (admin)
+### Test 8.0: Crear un Publish Request (Rol Usuario)
+
+```http
+POST /api/v1/knowledge/<KNOWLEDGE_ITEM_ID>/publish
+Authorization: Bearer <TOKEN_USER>
+Content-Type: application/json
+
+{
+  "reason": "Documentación útil para todo el equipo."
+}
+```
+
+**Esperado:** `200 OK` (o 202 dependiendo del Result map).
+
+### Test 8.1: Listar publish requests (Admin)
 
 ```http
 GET /api/v1/admin/publish-requests
 Authorization: Bearer <TOKEN_ADMIN>
 ```
 
-**Esperado:** `200 OK` — lista (posiblemente vacía si nadie pidió publicar).
+**Esperado:** `200 OK` — lista con el request que acabás de crear en el paso 8.0.
 
 ### Test 8.2: Acceso denegado con usuario normal
 

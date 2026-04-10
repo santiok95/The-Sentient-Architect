@@ -6,5 +6,6 @@ public record SearchKnowledgeRequest(
     string Query,
     int MaxResults = 5,
     bool IncludeShared = true,
-    float MinimumScore = 0.7f
+    float MinimumScore = 0.35f,
+    bool IncludeAllScopes = false
 );

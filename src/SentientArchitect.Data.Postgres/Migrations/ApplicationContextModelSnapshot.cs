@@ -365,8 +365,20 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ActiveRepositoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContextMode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreferredStack")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -394,6 +406,8 @@ namespace SentientArchitect.Data.Postgres.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ActiveRepositoryId");
 
                     b.HasIndex("UserId", "Status");
 
@@ -921,6 +935,11 @@ namespace SentientArchitect.Data.Postgres.Migrations
 
             modelBuilder.Entity("SentientArchitect.Domain.Entities.Conversation", b =>
                 {
+                    b.HasOne("SentientArchitect.Domain.Entities.RepositoryInfo", null)
+                        .WithMany()
+                        .HasForeignKey("ActiveRepositoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SentientArchitect.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

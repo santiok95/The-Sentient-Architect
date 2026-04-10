@@ -11,6 +11,7 @@ public class Conversation : BaseEntity
         TenantId = tenantId;
         Title = title;
         Status = ConversationStatus.Active;
+        ContextMode = ConsultantContextMode.Auto;
         TokenCount = 0;
         UpdatedAt = DateTime.UtcNow;
         Messages = new HashSet<ConversationMessage>();
@@ -25,6 +26,9 @@ public class Conversation : BaseEntity
     public Guid TenantId { get; private set; }
     public string Title { get; private set; } = "New Conversation";
     public ConversationStatus Status { get; private set; }
+    public ConsultantContextMode ContextMode { get; private set; }
+    public Guid? ActiveRepositoryId { get; private set; }
+    public string? PreferredStack { get; private set; }
     public string? Summary { get; private set; }
     public int TokenCount { get; private set; }
     public DateTime UpdatedAt { get; private set; }
@@ -54,6 +58,22 @@ public class Conversation : BaseEntity
     public void UpdateTitle(string title)
     {
         Title = title;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateConsultantContext(
+        Guid? activeRepositoryId,
+        string? preferredStack,
+        ConsultantContextMode? contextMode = null)
+    {
+        ActiveRepositoryId = activeRepositoryId;
+        PreferredStack = string.IsNullOrWhiteSpace(preferredStack)
+            ? null
+            : preferredStack.Trim();
+
+        if (contextMode.HasValue)
+            ContextMode = contextMode.Value;
+
         UpdatedAt = DateTime.UtcNow;
     }
 }
