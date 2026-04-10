@@ -1,7 +1,7 @@
 # The Sentient Architect — Frontend Implementation Log
 
 **Spec de Referencia:** `docs/superpowers/specs/2026-04-10-frontend-design.md`  
-**Estado:** Iniciando Fase 1
+**Estado:** ✅ Fase 1 Completada — 2026-04-10
 
 ## Status Legend
 - ✅ Completed
@@ -29,19 +29,19 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Setup Vitest + MSW | `vitest.config.ts`, `mocks/` | 📋 | Definir infraestructura de tests unitarios y mockear APIs con MSW. |
-| 1. Scaffold Next.js 15 | `src/app/` | 📋 | App Router, sin `src/pages`. Limpieza inicial. |
-| 2. Dependencias del Spec | `package.json` | 📋 | shadcn/ui, tailwind 4, zustand 5, react-query 5, signalr 8, next-safe-action 7, zod. |
-| 3. Typography Fira Code + Inter | `app/layout.tsx` | 📋 | Importación de Google Fonts e inyección de clases. |
-| 4. Setup Theme (next-themes) | `app/layout.tsx`, `globals.css` | 📋 | Temas Dark/Light. Paleta "Dark/Neon Purple" del mockup. |
-| 5. CLI shadcn/ui base | `components/ui/` | 📋 | Integrar Button, Input, Card, Dialog, Sheet, etc. |
-| 6. Type Safety Pipeline | `lib/api.types.ts` | 📋 | Correr `openapi-typescript`. Garantizar end-to-end con .NET. |
-| 7. API Client Typed base | `lib/api-client.ts` | 📋 | Configuración de JWT auth, error intercepting y *Result Pattern*. |
-| 8. Zod Schemas Centrales | `lib/schemas.ts` | 📋 | Centralizar reglas de validación (Auth, Ingest, Profile) para evitar repetición. |
-| 9. Auth Layer (Zustand + JWT) | `lib/auth.ts` | 📋 | Flujos de Login, Update de Tokens y Logout. |
-| 10. SignalR Base Singleton | `lib/signalr.ts` | 📋 | Instanciar el HubClient temprano y atarlo al estado global para chequear conectividad (`Disconnected`, `Reconnecting`). |
-| 11. Rutas Públicas de Auth | `app/(public)/*` | 📋 | Páginas de Login (`/login`) y Registro (`/register`). |
-| 12. Protección de Rutas | `middleware.ts` | 📋 | Proteger toda ruta bajo el Route Group `(dashboard)`. |
+| 0. Setup Vitest + MSW | `vitest.config.ts`, `src/mocks/` | ✅ | Vitest + RTL + MSW v2 node server. Handlers para auth, knowledge y conversations. 13/13 tests pasando. |
+| 1. Scaffold Next.js 15 | `src/app/` | ✅ | App Router, `src/` dir, `@/*` alias. Next.js 16.2 / React 19.2. |
+| 2. Dependencias del Spec | `package.json` | ✅ | zustand@5, react-query@5, @microsoft/signalr@10, next-safe-action@7, zod@4, next-themes, clsx, tailwind-merge. |
+| 3. Typography Fira Code + Inter | `app/layout.tsx` | ✅ | `Inter` → `--font-inter`. `Fira_Code` → `--font-fira-code`. Inyectadas como CSS vars. H1-H6 + `.font-heading` + `.font-mono` usan Fira Code. |
+| 4. Setup Theme (next-themes) | `app/layout.tsx`, `globals.css` | ✅ | ThemeProvider defaultTheme="dark". Paleta "Dark/Neon Purple": violet `#8b5cf6` como primary/accent. CSS tokens en oklch para light + dark. |
+| 5. CLI shadcn/ui base | `components/ui/` | ✅ | button, input, card, dialog, sheet, badge, separator, skeleton, sonner, label, textarea, select, dropdown-menu, avatar, scroll-area, tabs, tooltip. |
+| 6. Type Safety Pipeline | `lib/api.types.ts` | ✅ | Stub types manuales alineados con `docs/API_CONTRACTS.md`. Script `npm run types:generate` configurado para regenerar desde el backend vivo. |
+| 7. API Client Typed base | `lib/api-client.ts` | ✅ | JWT auth header, refresh automático en 401, cola de refresh, Result Pattern `ApiSuccess<T> / ApiError`. Evento `sa:unauthorized` para el store. |
+| 8. Zod Schemas Centrales | `lib/schemas.ts` | ✅ | Auth, Knowledge, Consultant, Guardian, Profile, Admin. Types inferidos exportados. |
+| 9. Auth Layer (Zustand + JWT) | `lib/auth.ts` | ✅ | `login()`, `register()`, `logout()`. `getToken()` exportado para signalr.ts. |
+| 10. SignalR Base Singleton | `lib/signalr.ts` | ✅ | `getHubConnection(hubName)`: Map<HubName, HubConnection>. `startHub()`, `stopHub()`, `getHubState()`. Reconnect exponential backoff (máx 30s). Nunca instanciado en componentes. |
+| 11. Rutas Públicas de Auth | `app/(public)/login/page.tsx`, `app/(public)/register/page.tsx` | ✅ | RSC shells con shadcn/ui Cards. Sin `'use client'`. |
+| 12. Protección de Rutas | `middleware.ts` | ✅ | Cookie `sa_auth` como señal Edge-compatible. Redirect `/login?from=...` para rutas protegidas. Redirect `/` para rutas de auth cuando ya logueado. |
 
 ---
 
