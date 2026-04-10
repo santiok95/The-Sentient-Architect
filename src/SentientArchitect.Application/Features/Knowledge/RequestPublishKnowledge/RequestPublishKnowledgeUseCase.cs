@@ -22,11 +22,7 @@ public class RequestPublishKnowledgeUseCase(IApplicationDbContext db)
         if (knowledgeItem.UserId != request.UserId)
             return Result<Guid>.Failure(["You can only request publishing for your own knowledge items."], ErrorType.Forbidden);
 
-        // Regla de Negocio 2: El item no debe ser global/compartido ya
-        if (knowledgeItem.IsShared)
-            return Result<Guid>.Failure(["Knowledge item is already shared globally."], ErrorType.Validation);
-
-        // Regla de Negocio 3: Idempotencia - No tener otro request pendiente en vuelo
+        // Regla de Negocio 2: Idempotencia - No tener otro request pendiente en vuelo
         var existingRequest = await db.ContentPublishRequests
             .FirstOrDefaultAsync(r => r.KnowledgeItemId == request.KnowledgeItemId && r.Status == PublishRequestStatus.Pending, ct);
 

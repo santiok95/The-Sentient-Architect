@@ -25,7 +25,8 @@ export const createConversationAction = authedActionClient
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail ?? 'Error al crear la conversación')
     }
-    return res.json() as Promise<{ id: string; objective: string; status: string }>
+    const data = await res.json() as { conversationId: string; title: string }
+    return { id: data.conversationId, objective: data.title, status: 'Active' }
   })
 
 // ─── Send Message ─────────────────────────────────────────────────────────────
@@ -56,13 +57,9 @@ const archiveSchema = z.object({ id: z.string().uuid() })
 export const archiveConversationAction = authedActionClient
   .schema(archiveSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const res = await fetch(`${BASE_URL}/api/v1/conversations/${parsedInput.id}`, {
+    const res = await fetch(`${BASE_URL}/api/v1/conversations/${parsedInput.id}/archive`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${ctx.token}`,
-      },
-      body: JSON.stringify({ status: 'Archived' }),
+      headers: { Authorization: `Bearer ${ctx.token}` },
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

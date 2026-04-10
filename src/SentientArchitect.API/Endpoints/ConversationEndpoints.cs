@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Application.Features.Conversations.ArchiveConversation;
 using SentientArchitect.Application.Features.Conversations.CreateConversation;
 using SentientArchitect.Application.Features.Conversations.DeleteConversation;
 using SentientArchitect.Application.Features.Conversations.GetConversationDetail;
@@ -55,6 +56,19 @@ public class ConversationEndpoints : IEndpointModule
             return result.ToHttpResult();
         })
         .WithName("GetConversationDetail")
+        .WithOpenApi();
+
+        group.MapPatch("/{id:guid}/archive", async (
+            [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] ArchiveConversationUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new ArchiveConversationRequest(id, userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("ArchiveConversation")
         .WithOpenApi();
 
         group.MapDelete("/{id:guid}", async (

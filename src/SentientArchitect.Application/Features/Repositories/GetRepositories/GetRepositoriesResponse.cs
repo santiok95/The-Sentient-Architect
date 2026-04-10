@@ -9,4 +9,4 @@ public record RepositoryItem(
     DateTime? LastAnalyzedAt,
     int ReportCount);
 
-public record GetRepositoriesResponse(List<RepositoryItem> Repositories);
+public record GetRepositoriesResponse(List<RepositoryItem> Items, int TotalCount);
