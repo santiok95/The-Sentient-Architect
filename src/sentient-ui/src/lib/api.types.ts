@@ -87,10 +87,19 @@ export interface Trend {
   id: string
   name: string
   category: string
-  traction: TractionLevel
-  score: number
-  description: string
-  createdAt: string
+  tractionLevel: TractionLevel
+  relevanceScore: number
+  summary: string
+  sources: string[]
+  firstDetectedAt: string
+  lastUpdatedAt: string
+}
+
+export interface TrendSnapshot {
+  tractionLevel: TractionLevel
+  mentionCount: number
+  sentimentScore: number
+  snapshotDate: string
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -109,13 +118,32 @@ export interface UserProfile {
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
+export type PublishRequestStatus = 'Pending' | 'Approved' | 'Rejected'
+
 export interface PublishRequest {
   id: string
-  knowledgeItemId: string
-  knowledgeItemTitle: string
-  requestedByUserId: string
-  requestedByName: string
-  reason: string
-  status: 'Pending' | 'Approved' | 'Rejected'
+  knowledgeItem: {
+    id: string
+    title: string
+    type: string
+    summary?: string
+  }
+  requestedBy: {
+    id: string
+    displayName: string
+    role: string
+  }
+  requestReason?: string
+  status: PublishRequestStatus
   createdAt: string
+  reviewedAt?: string
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  displayName: string
+  role: string
+  createdAt: string
+  todayTokenUsage: number
 }

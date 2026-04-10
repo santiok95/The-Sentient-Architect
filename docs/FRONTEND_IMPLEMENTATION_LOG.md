@@ -1,7 +1,8 @@
 # The Sentient Architect — Frontend Implementation Log
 
 **Spec de Referencia:** `docs/superpowers/specs/2026-04-10-frontend-design.md`  
-**Estado:** ✅ Fase 1 Completada — 2026-04-10
+**Estado:** ✅ Fases 1-4 Completadas, Fase 5 (Tareas 0-3) Completadas — 2026-04-10  
+**Test suite:** 81 tests total — **78 passing** (3 pre-existing failures in guardian.test.ts)
 
 ## Status Legend
 - ✅ Completed
@@ -114,9 +115,16 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 ### 3D. Trends Radar & 3E. Admin Panel
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Tests Zustand Store Auth| `tests/store` | 📋 | Asegurar que Admin panel quede inaccesible para Roles 'User'. |
-| 1. Radar Snapshots | `features/trends/page.tsx` | 📋 | Tabla base de visualización de crecimiento de trends. |
-| 2. Admin Dashboards | `features/admin/page.tsx` | 📋 | Tabla de tokens consumidos, approval requests (roles ocultos si en User). |
+| 0. Types & Schemas | `lib/api.types.ts`, `lib/schemas.ts` | ✅ | `Trend` (tractionLevel, relevanceScore, sources, TrendSnapshot), `PublishRequest` (nested knowledgeItem/requestedBy), `reviewPublishRequestSchema` con `.refine()`. |
+| 1. MSW Handlers Trends | `mocks/handlers/trends.handlers.ts` | ✅ | 10 mock trends con filtros por category/traction/minRelevance. GET /api/v1/trends, GET /:id/snapshots, POST admin/trends/sync. |
+| 2. MSW Handlers Admin | `mocks/handlers/admin.handlers.ts` | ✅ | 5 mock publish requests (3 Pending, 1 Approved, 1 Rejected). GET + PATCH con 400ms latencia simulada. GET /admin/users. |
+| 3. Hooks Trends | `features/trends/hooks/useTrends.ts` | ✅ | `useTrends(filters)` staleTime 5min + `useTrendSnapshots(id)`. Constantes `TREND_CATEGORIES`, `TRACTION_LEVELS`. |
+| 4. Hooks Admin | `features/admin/hooks/usePublishRequests.ts` | ✅ | `usePublishRequests(status?)` + `useInvalidatePublishRequests()`. |
+| 5. Admin Server Action | `features/admin/actions.ts` | ✅ | `reviewPublishRequestAction` — authedActionClient + PATCH /api/v1/admin/publish-requests/:id. |
+| 6. TrendsTable | `features/trends/components/TrendsTable.tsx` | ✅ | Filter bar (category + traction), `ScoreBar` por traction level, badges Emerging=sky/Growing=violet/Mainstream=emerald/Declining=red, skeleton rows, botón "Forzar Scan". |
+| 7. PublishRequestsView | `features/admin/components/PublishRequestsView.tsx` | ✅ | **React 19 `useOptimistic`** — approve/reject actualiza fila antes del POST. `RejectDialog` con validación mínima. Tabs Pending/Approved/Rejected/All con live count badge. |
+| 8. Trends page | `app/(dashboard)/trends/page.tsx` + `loading.tsx` | ✅ | RSC shell con TrendingUp icon + TrendsTable client component. Skeleton matching. |
+| 9. Admin page | `app/(dashboard)/admin/publish-requests/page.tsx` + `loading.tsx` | ✅ | **Role guard** — lee `user.role` de Zustand. Redirige a /login si no hay usuario. `AccessDenied` si role !== 'Admin'. |
 
 ---
 
@@ -138,10 +146,10 @@ Para que el código no se desvíe del diseño original, estas reglas aplican en 
 
 | Tarea | Archivo(s) | Estado | Notas |
 |---|---|---|---|
-| 0. Stress Test Retry Queue | `tests/resiliency` | 📋 | Simular caída de red y asegurar queue local y rebote `useOptimistic`. |
-| 1. Zero-Latency UI (Chat) | `features/consultant/` | 📋 | Integrar `useOptimistic` de React 19 para pintar mensajes User inmediatamente. |
-| 2. Zero-Latency Acciones | Varias (EJ: `PublishRequest`)| 📋 | Botones de Accept/Reject reaccionan optimísticamente antes del POST. |
-| 3. Offline Queue & Retry | `store/ui-store.ts`, `signalr.ts` | 📋 | Catch network errors, dejar mensajes trabados en "Retry" en vez de descartarlos. |
+| 0. Stress Test Retry Queue | `__tests__/resiliency/offline-queue.test.tsx` | ✅ | **11 tests** — store actions (enqueue/dequeue/clear/incrementRetry/unique IDs) + hook (flush on reconnect, no flush on stable Connected, no flush on empty queue). 11/11 passing. |
+| 1. Zero-Latency UI (Chat) | `features/consultant/components/ChatPanel.tsx` | ✅ | `useOptimistic(serverMessages, reducer)` + `useTransition`. `streamCompleteRef` mantiene la transición abierta hasta que SignalR ReceiveComplete resuelve la promesa. Auto-rollback en error. |
+| 2. Zero-Latency Acciones | `features/admin/components/PublishRequestsView.tsx` | ✅ | `useOptimistic` + `startTransition(async () => { updateOptimistic(...); await executeAsync(...) })`. Approve/Reject sin flash. |
+| 3. Offline Queue & Retry | `store/ui-store.ts`, `hooks/useOfflineQueue.ts` | ✅ | `OfflineQueueItem` type, `offlineQueue[]` en Zustand (persistido). `enqueue/dequeue/clear/incrementRetry`. `useOfflineQueue` detecta transición Disconnected→Connected y flushea la cola. Toast Fira Code + WifiOff badge en ChatPanel. |
 | 4. Cancel Generation UI | `ChatPanel.tsx` | 📋 | Botón "Stop" atado al token cancellation del SignalR/API. |
 
 ---

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useOptimistic, useTransition } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Send, Loader2, Bot, User, Sparkles } from 'lucide-react'
+import { Send, Loader2, Bot, User, Sparkles, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -17,6 +17,8 @@ import {
 } from '../hooks/useConversations'
 import { sendMessageAction } from '../actions'
 import { useHub } from '@/hooks/useHub'
+import { useUiStore } from '@/store/ui-store'
+import { useOfflineQueue } from '@/hooks/useOfflineQueue'
 
 interface Props {
   conversationId: string | null
@@ -83,18 +85,32 @@ function TypingIndicator() {
 
 export function ChatPanel({ conversationId }: Props) {
   const [input, setInput] = useState('')
-  const [optimisticMessages, setOptimisticMessages] = useState<ConversationMessage[]>([])
   // Streaming state — one in-flight AI message at a time
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   // Buffer ref: accumulate chunks without triggering a re-render per token
   const streamBufferRef = useRef('')
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Resolver that signals the transition to end when SignalR streaming is done
+  const streamCompleteRef = useRef<(() => void) | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const queryClient = useQueryClient()
 
+  const hubState = useUiStore((s) => s.hubStatus['conversation']?.state ?? 'Unknown')
+  const enqueueOfflineAction = useUiStore((s) => s.enqueueOfflineAction)
+  const isOffline = hubState !== 'Connected'
+
   const { data: conversation, isLoading } = useConversation(conversationId)
-  const messages = [...(conversation?.recentMessages ?? []), ...optimisticMessages]
+  const serverMessages = conversation?.recentMessages ?? []
+
+  // React 19 useOptimistic: shows user message instantly, stays until transition ends.
+  // The transition is held open via streamCompleteRef until SignalR ReceiveComplete fires,
+  // so the message is visible for the full HTTP + streaming cycle.
+  const [optimisticMessages, addOptimistic] = useOptimistic(
+    serverMessages,
+    (state: ConversationMessage[], newMsg: ConversationMessage) => [...state, newMsg],
+  )
+  const [isPending, startTransition] = useTransition()
 
   // ── SignalR: conversation hub ──────────────────────────────────────────────
   const handleReceiveChunk = useCallback((convId: string, token: string) => {
@@ -109,9 +125,11 @@ export function ChatPanel({ conversationId }: Props) {
     flushTimerRef.current = null
     setStreamingContent(null)
     streamBufferRef.current = ''
-    setOptimisticMessages([])
     queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(convId) })
     queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+    // Release the transition: useOptimistic merges with the incoming server state
+    streamCompleteRef.current?.()
+    streamCompleteRef.current = null
   }, [conversationId, queryClient])
 
   const handleReceiveError = useCallback((convId: string, message: string) => {
@@ -120,8 +138,10 @@ export function ChatPanel({ conversationId }: Props) {
     flushTimerRef.current = null
     setStreamingContent(null)
     streamBufferRef.current = ''
-    setOptimisticMessages([])
     toast.error(message ?? 'Error en la respuesta del agente')
+    // Release the transition so useOptimistic auto-reverts the optimistic message
+    streamCompleteRef.current?.()
+    streamCompleteRef.current = null
   }, [conversationId])
 
   useHub('conversation', {
@@ -146,29 +166,41 @@ export function ChatPanel({ conversationId }: Props) {
     }
   }, [streamingContent !== null]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { execute, isPending } = useAction(sendMessageAction, {
+  const { executeAsync } = useAction(sendMessageAction, {
     onSuccess: () => {
-      // Don't invalidate yet — wait for ReceiveComplete from SignalR
-      // Start flush timer immediately so streaming content renders
+      // HTTP 200: message enqueued on server. Start streaming animation.
+      // Don't invalidate yet — wait for SignalR ReceiveComplete.
       streamBufferRef.current = ''
       setStreamingContent('')
     },
-    onError: ({ error }) => {
-      setOptimisticMessages([])
-      setStreamingContent(null)
-      streamBufferRef.current = ''
-      toast.error(error.serverError ?? 'Error al enviar el mensaje')
-    },
   })
+
+  // Flush queued messages when the hub reconnects
+  useOfflineQueue({ execute: (payload) => executeAsync(payload) })
 
   // Auto-scroll on new content
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, isPending, streamingContent])
+  }, [optimisticMessages.length, isPending, streamingContent])
 
   function send() {
     const trimmed = input.trim()
     if (!trimmed || !conversationId || isPending) return
+
+    setInput('')
+
+    // If the hub is disconnected, save to offline queue and notify user
+    if (isOffline) {
+      enqueueOfflineAction({
+        type: 'send_message',
+        payload: { conversationId, content: trimmed, mode: 'Auto' },
+      })
+      toast.info('Sin conexión — mensaje guardado en cola.', {
+        icon: <WifiOff className="h-4 w-4" />,
+        style: { fontFamily: 'var(--font-fira-code)' },
+      })
+      return
+    }
 
     const optimistic: ConversationMessage = {
       id: `opt-${Date.now()}`,
@@ -176,9 +208,26 @@ export function ChatPanel({ conversationId }: Props) {
       content: trimmed,
       createdAt: new Date().toISOString(),
     }
-    setOptimisticMessages([optimistic])
-    setInput('')
-    execute({ conversationId, content: trimmed, mode: 'Auto' })
+
+    // Create a promise that resolves when SignalR ReceiveComplete (or ReceiveError) fires.
+    // This keeps the transition alive — and thus useOptimistic visible — for the full
+    // HTTP request + streaming cycle.
+    const streamDonePromise = new Promise<void>((resolve) => {
+      streamCompleteRef.current = resolve
+    })
+
+    startTransition(async () => {
+      addOptimistic(optimistic)
+      const result = await executeAsync({ conversationId, content: trimmed, mode: 'Auto' })
+      if (result?.serverError) {
+        toast.error(result.serverError, { style: { fontFamily: 'var(--font-fira-code)' } })
+        streamCompleteRef.current?.()
+        streamCompleteRef.current = null
+        return
+      }
+      // Hold the transition open until SignalR finishes streaming
+      await streamDonePromise
+    })
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -214,6 +263,12 @@ export function ChatPanel({ conversationId }: Props) {
           <Badge variant="outline" className="text-xs">
             {conversation.mode}
           </Badge>
+          {isOffline && (
+            <Badge variant="destructive" className="gap-1 text-xs font-mono">
+              <WifiOff className="h-3 w-3" />
+              Offline
+            </Badge>
+          )}
         </div>
       )}
 
@@ -233,7 +288,7 @@ export function ChatPanel({ conversationId }: Props) {
               ))}
             </>
           ) : (
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+            optimisticMessages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
           )}
           {/* Live streaming bubble — renders while AI is typing */}
           {streamingContent !== null && (

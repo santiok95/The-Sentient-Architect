@@ -104,6 +104,15 @@ export const changeRoleSchema = z.object({
   role: z.enum(['Admin', 'User']),
 })
 
+export const reviewPublishRequestSchema = z.object({
+  id: z.string().uuid('ID de solicitud inválido'),
+  action: z.enum(['Approve', 'Reject']),
+  rejectionReason: z.string().max(512).optional(),
+}).refine(
+  (data) => data.action !== 'Reject' || (data.rejectionReason && data.rejectionReason.length >= 5),
+  { message: 'Razón de rechazo requerida', path: ['rejectionReason'] },
+)
+
 // ─── Type Exports (inferred from schemas) ────────────────────────────────────
 
 export type LoginInput = z.infer<typeof loginSchema>
@@ -114,3 +123,4 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type CreateConversationInput = z.infer<typeof createConversationSchema>
 export type SubmitRepoInput = z.infer<typeof submitRepoSchema>
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
+export type ReviewPublishRequestInput = z.infer<typeof reviewPublishRequestSchema>

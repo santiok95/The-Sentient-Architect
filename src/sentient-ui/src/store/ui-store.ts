@@ -22,6 +22,22 @@ interface HubStatus {
   lastErrorAt?: string
 }
 
+/**
+ * Offline message queue. Stores actions that couldn't be sent due to disconnection.
+ * Flushed automatically when the hub reconnects (see useOfflineQueue hook).
+ */
+export interface OfflineQueueItem {
+  id: string
+  type: 'send_message'
+  payload: {
+    conversationId: string
+    content: string
+    mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
+  }
+  queuedAt: string
+  retryCount: number
+}
+
 interface UiState {
   // Layout
   sidebarOpen: boolean
@@ -35,6 +51,9 @@ interface UiState {
 
   // SignalR status (UI indicators only — no connection objects)
   hubStatus: Record<string, HubStatus>
+
+  // Offline queue: messages queued while disconnected
+  offlineQueue: OfflineQueueItem[]
 
   // Command palette
   commandPaletteOpen: boolean
@@ -55,6 +74,12 @@ interface UiActions {
 
   // Hub status
   setHubStatus: (hubName: string, status: HubStatus) => void
+
+  // Offline queue
+  enqueueOfflineAction: (item: Omit<OfflineQueueItem, 'id' | 'queuedAt' | 'retryCount'>) => void
+  dequeueOfflineAction: (id: string) => void
+  clearOfflineQueue: () => void
+  incrementRetry: (id: string) => void
 
   // Command palette
   setCommandPaletteOpen: (open: boolean) => void
@@ -90,7 +115,29 @@ export const useUiStore = create<UiState & UiActions>()(
         set((s) => ({
           hubStatus: { ...s.hubStatus, [hubName]: status },
         })),
-
+      // ── Offline Queue ────────────────────────────────────────────────────────
+      offlineQueue: [],
+      enqueueOfflineAction: (item) =>
+        set((s) => ({
+          offlineQueue: [
+            ...s.offlineQueue,
+            {
+              ...item,
+              id: `oq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              queuedAt: new Date().toISOString(),
+              retryCount: 0,
+            },
+          ],
+        })),
+      dequeueOfflineAction: (id) =>
+        set((s) => ({ offlineQueue: s.offlineQueue.filter((i) => i.id !== id) })),
+      clearOfflineQueue: () => set({ offlineQueue: [] }),
+      incrementRetry: (id) =>
+        set((s) => ({
+          offlineQueue: s.offlineQueue.map((i) =>
+            i.id === id ? { ...i, retryCount: i.retryCount + 1 } : i,
+          ),
+        })),
       // ── Command Palette ──────────────────────────────────────────────────────
       commandPaletteOpen: false,
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
@@ -103,6 +150,7 @@ export const useUiStore = create<UiState & UiActions>()(
         sidebarOpen: state.sidebarOpen,
         activeTheme: state.activeTheme,
         user: state.user,
+        offlineQueue: state.offlineQueue,
       }),
     },
   ),
@@ -115,3 +163,4 @@ export const selectConsultantPanelOpen = (s: UiState) => s.consultantPanelOpen
 export const selectActiveTheme = (s: UiState) => s.activeTheme
 export const selectUser = (s: UiState) => s.user
 export const selectHubStatus = (s: UiState) => s.hubStatus
+export const selectOfflineQueue = (s: UiState) => s.offlineQueue
