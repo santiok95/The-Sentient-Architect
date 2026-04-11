@@ -80,16 +80,12 @@ public sealed class CodeAnalyzer(
             // ── C# static analysis ───────────────────────────────────────────────
             // All .cs files for architecture detection (needs the full picture).
             var csFiles = Directory.GetFiles(clonePath, "*.cs", SearchOption.AllDirectories)
-                .Where(f => !f.Contains(@"\obj\") && !f.Contains(@"\bin\")
-                         && !f.Contains("/obj/") && !f.Contains("/bin/"))
+                .Where(f => IsAnalyzableFile(f))
                 .ToArray();
 
-            // Quality analysis excludes generated/test files — they produce noisy false positives.
-            var qualityFiles = csFiles.Where(f =>
-                !f.Contains(@"\Migrations\", StringComparison.OrdinalIgnoreCase) &&
-                !f.Contains("/Migrations/",  StringComparison.OrdinalIgnoreCase) &&
-                !f.Contains(@"\obj\") && !f.Contains("/obj/") &&
-                !IsTestFile(f))
+            // Quality analysis additionally excludes test files and migrations.
+            var qualityFiles = csFiles
+                .Where(f => !IsTestFile(f) && !IsMigrationFile(f))
                 .ToArray();
 
             // Detect primary language from file counts
@@ -121,6 +117,28 @@ public sealed class CodeAnalyzer(
                 }
             }
 
+            // ── TypeScript / JavaScript static analysis ──────────────────────
+            var tsFiles = Directory.GetFiles(clonePath, "*", SearchOption.AllDirectories)
+                .Where(f =>
+                {
+                    var ext = Path.GetExtension(f);
+                    return (ext.Equals(".ts",  StringComparison.OrdinalIgnoreCase) ||
+                            ext.Equals(".tsx", StringComparison.OrdinalIgnoreCase) ||
+                            ext.Equals(".js",  StringComparison.OrdinalIgnoreCase) ||
+                            ext.Equals(".jsx", StringComparison.OrdinalIgnoreCase)) &&
+                           IsAnalyzableFile(f) &&
+                           !IsTypeScriptTestFile(f) &&
+                           !IsGeneratedWebAsset(f);
+                })
+                .ToArray();
+
+            if (tsFiles.Length > 0)
+            {
+                await reporter.ReportProgressAsync(repositoryInfoId, 60, $"Analizando {tsFiles.Length} archivos TypeScript/JavaScript...", ct);
+                var tsFindings = await AnalyzeTypeScriptFilesAsync(tsFiles, clonePath, report.Id, ct);
+                findings.AddRange(tsFindings);
+            }
+
             await reporter.ReportProgressAsync(repositoryInfoId, 70, "Detectando patrones arquitectónicos...", ct);
 
             var architectureFindings = await DetectArchitecturalPatternsAsync(csFiles, clonePath, report.Id, ct);
@@ -134,8 +152,10 @@ public sealed class CodeAnalyzer(
 
             var criticalCount = findings.Count(f => f.Severity == FindingSeverity.Critical);
             var highCount     = findings.Count(f => f.Severity == FindingSeverity.High);
+            var totalFiles    = csFiles.Length + tsFiles.Length;
             var summary = $"Análisis completo. Se encontraron {findings.Count} hallazgos " +
-                          $"({criticalCount} críticos, {highCount} altos) en {csFiles.Length} archivos C#.";
+                          $"({criticalCount} críticos, {highCount} altos) en {totalFiles} archivos " +
+                          $"({csFiles.Length} C#, {tsFiles.Length} TypeScript/JavaScript).";
 
             report.Complete(summary, findings.Count, criticalCount);
             repositoryInfo.MarkAnalyzed();
@@ -208,10 +228,7 @@ public sealed class CodeAnalyzer(
             var buildFiles = Directory.GetFiles(clonePath, pattern, SearchOption.AllDirectories);
             foreach (var buildFile in buildFiles)
             {
-                // Skip the build output folders
-                if (buildFile.Contains(@"\obj\") || buildFile.Contains(@"\bin\")
-                 || buildFile.Contains("/obj/")  || buildFile.Contains("/bin/"))
-                    continue;
+                if (!IsAnalyzableFile(buildFile)) continue;
                 try
                 {
                     var content = await File.ReadAllTextAsync(buildFile, ct);
@@ -265,9 +282,7 @@ public sealed class CodeAnalyzer(
 
         foreach (var file in Directory.GetFiles(clonePath, "*", SearchOption.AllDirectories))
         {
-            if (file.Contains(@"\obj\") || file.Contains(@"\bin\")
-             || file.Contains("/obj/")  || file.Contains("/bin/"))
-                continue;
+            if (!IsAnalyzableFile(file)) continue;
 
             var ext = Path.GetExtension(file);
             if (executableExtensions.Contains(ext))
@@ -303,9 +318,7 @@ public sealed class CodeAnalyzer(
 
         foreach (var file in Directory.GetFiles(clonePath, "*", SearchOption.AllDirectories))
         {
-            if (file.Contains(@"\obj\") || file.Contains(@"\bin\")
-             || file.Contains("/obj/")  || file.Contains("/bin/"))
-                continue;
+            if (!IsAnalyzableFile(file)) continue;
 
             var ext = Path.GetExtension(file);
             if (!textExtensions.Contains(ext)) continue;
@@ -356,8 +369,7 @@ public sealed class CodeAnalyzer(
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         var allCsFiles = Directory.GetFiles(clonePath, "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains(@"\obj\") && !f.Contains(@"\bin\")
-                     && !f.Contains("/obj/") && !f.Contains("/bin/"))
+            .Where(f => IsAnalyzableFile(f) && !IsMigrationFile(f) && !IsTestFile(f))
             .ToArray();
 
         foreach (var file in allCsFiles)
@@ -565,15 +577,39 @@ public sealed class CodeAnalyzer(
                         relPath, invLine));
                 }
 
-                // Reflection-based invocation (potential code injection)
-                if (invokeText.Contains("Assembly.Load", StringComparison.Ordinal)
-                 || invokeText.Contains("Assembly.LoadFrom", StringComparison.Ordinal)
-                 || invokeText.Contains("Activator.CreateInstance", StringComparison.Ordinal))
+                // Reflection-based invocation (potential code injection).
+                // Check the AST node directly — NOT invokeText.Contains() — to avoid flagging
+                // strings that mention these names as text (e.g., the analyzer's own patterns).
+                if (invocation.Expression is MemberAccessExpressionSyntax reflectionAccess)
                 {
-                    findings.Add(new AnalysisFinding(
-                        reportId, FindingSeverity.High, "Seguridad",
-                        $"Carga dinámica de código via reflexión ({invocation.Expression}) — verificar que el origen sea confiable.",
-                        relPath, invLine));
+                    var typeName   = reflectionAccess.Expression.ToString();
+                    var methodName = reflectionAccess.Name.Identifier.Text;
+
+                    var isReflectionCall =
+                        (typeName is "Assembly"  && methodName is "Load" or "LoadFrom" or "LoadFile") ||
+                        (typeName is "Activator" && methodName is "CreateInstance" or "CreateInstanceFrom");
+
+                    if (isReflectionCall)
+                    {
+                        // Skip Activator.CreateInstance when the type comes from a same-assembly
+                        // GetTypes() call — this is the standard endpoint/module auto-discovery pattern
+                        // and carries no remote code execution risk.
+                        var enclosingMethod = invocation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                        var methodBody      = enclosingMethod?.Body?.ToString() ?? string.Empty;
+                        var isSameAssemblyPattern =
+                            typeName is "Activator" &&
+                            (methodBody.Contains("GetTypes()",           StringComparison.Ordinal) ||
+                             methodBody.Contains("GetExecutingAssembly", StringComparison.Ordinal) ||
+                             methodBody.Contains("typeof(",              StringComparison.Ordinal));
+
+                        if (!isSameAssemblyPattern)
+                        {
+                            findings.Add(new AnalysisFinding(
+                                reportId, FindingSeverity.High, "Seguridad",
+                                $"Carga dinámica de código via reflexión ({typeName}.{methodName}) — verificar que el origen sea confiable.",
+                                relPath, invLine));
+                        }
+                    }
                 }
             }
 
@@ -618,9 +654,8 @@ public sealed class CodeAnalyzer(
                 continue;
 
             var text = trivia.ToString();
-            if (!text.Contains("TODO",  StringComparison.OrdinalIgnoreCase)
-             && !text.Contains("FIXME", StringComparison.OrdinalIgnoreCase)
-             && !text.Contains("HACK",  StringComparison.OrdinalIgnoreCase))
+            // Use word-boundary regex to avoid false positives like "Hacker" matching "HACK".
+            if (!Regex.IsMatch(text, @"\b(TODO|FIXME|HACK|XXX)\b", RegexOptions.IgnoreCase))
                 continue;
 
             var lineSpan    = tree.GetLineSpan(trivia.Span);
@@ -653,7 +688,15 @@ public sealed class CodeAnalyzer(
         {
             if (literal.Kind() != SyntaxKind.StringLiteralExpression) continue;
             var value = literal.Token.ValueText;
-            if (string.IsNullOrWhiteSpace(value) || value.Length < 8) continue;
+
+            // Minimum length: short strings are parameter names or search patterns, not credentials.
+            if (string.IsNullOrWhiteSpace(value) || value.Length < 12) continue;
+
+            // Strings that end with '=' are search patterns (e.g. "password=", "connectionstring=").
+            if (value.TrimEnd().EndsWith('=')) continue;
+
+            // Strings containing regex meta-characters are detection patterns, not values.
+            if (value.IndexOfAny(['*', '^', '$', '|', '?', '[', ']', '(', ')']) >= 0) continue;
 
             if (secretKeywords.Any(k => value.Contains(k, StringComparison.OrdinalIgnoreCase)))
             {
@@ -784,7 +827,173 @@ public sealed class CodeAnalyzer(
         return findings;
     }
 
+    // ── TypeScript / JavaScript static analysis (regex-based) ────────────────
+
+    private static readonly (Regex Pattern, FindingSeverity Severity, string Category, string Message)[] TsQualityPatterns =
+    [
+        // Security
+        (new Regex(@"\beval\s*\(",                           RegexOptions.Compiled), FindingSeverity.Critical, "Seguridad",   "Uso de eval() — vector de inyección de código. Reemplazar con alternativas seguras."),
+        (new Regex(@"\bnew\s+Function\s*\(",                 RegexOptions.Compiled), FindingSeverity.Critical, "Seguridad",   "new Function() ejecuta código arbitrario — equivalente a eval(). Evitar."),
+        (new Regex(@"dangerouslySetInnerHTML",                RegexOptions.Compiled), FindingSeverity.High,     "Seguridad",   "dangerouslySetInnerHTML puede causar XSS si el contenido no está sanitizado. Revisar el origen del HTML."),
+        (new Regex(@"innerHTML\s*=",                         RegexOptions.Compiled), FindingSeverity.High,     "Seguridad",   "Asignación directa a innerHTML — riesgo de XSS si el valor viene del usuario. Usar textContent o sanitizar."),
+        (new Regex(@"document\.write\s*\(",                  RegexOptions.Compiled), FindingSeverity.High,     "Seguridad",   "document.write() es un vector de XSS y bloquea el parser. No usar."),
+        (new Regex(@"localStorage\.(setItem|getItem)\s*\(.*(?i:token|password|secret|key)", RegexOptions.Compiled | RegexOptions.IgnoreCase), FindingSeverity.High, "Seguridad", "Almacenar credenciales/tokens en localStorage es inseguro (accessible via XSS). Usar httpOnly cookies."),
+
+        // TypeScript-specific quality
+        (new Regex(@":\s*any\b",                             RegexOptions.Compiled), FindingSeverity.Medium,   "Calidad de código", "Uso de tipo 'any' — pierde los beneficios de TypeScript. Tipar correctamente."),
+        (new Regex(@"@ts-ignore",                            RegexOptions.Compiled), FindingSeverity.Medium,   "Calidad de código", "@ts-ignore suprime errores de TypeScript sin resolverlos. Usar @ts-expect-error y documentar por qué."),
+        (new Regex(@"@ts-nocheck",                           RegexOptions.Compiled), FindingSeverity.High,     "Calidad de código", "@ts-nocheck deshabilita TypeScript en todo el archivo. Tipar correctamente en vez de silenciar."),
+        (new Regex(@"as\s+any\b",                            RegexOptions.Compiled), FindingSeverity.Medium,   "Calidad de código", "Cast 'as any' — type escape hatch. Usar el tipo correcto o un type guard."),
+
+        // Console logs in production code
+        (new Regex(@"\bconsole\.(log|warn|error|debug)\s*\(", RegexOptions.Compiled), FindingSeverity.Low,    "Calidad de código", "console.log en código — usar un logger estructurado o eliminar antes de producción."),
+
+        // TODO / FIXME / HACK comments
+        (new Regex(@"//\s*(TODO|FIXME|HACK|XXX)\b",         RegexOptions.Compiled | RegexOptions.IgnoreCase), FindingSeverity.Low, "Deuda técnica", "Comentario TODO/FIXME/HACK — registrar como issue y resolver."),
+
+        // Hardcoded credentials in TS/JS
+        // Requires the value to be a quoted string literal (single, double, or backtick).
+        // Without quotes the match is a variable assignment, function call, or type annotation — NOT a credential.
+        (new Regex(@"(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*[`""'][^`""'<]{8,}[`""']", RegexOptions.Compiled), FindingSeverity.Critical, "Seguridad", "Posible credencial hardcodeada en TypeScript/JavaScript. Usar variables de entorno."),
+
+        // Promise anti-patterns
+        (new Regex(@"\.then\s*\([^)]*\)\s*\.catch\s*\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)", RegexOptions.Compiled), FindingSeverity.Medium, "Calidad de código", "Catch vacío en Promise — los errores se silencian. Manejar o propagar."),
+        (new Regex(@"catch\s*\([^)]*\)\s*\{\s*\}",          RegexOptions.Compiled), FindingSeverity.Medium,   "Calidad de código", "Bloque catch vacío — la excepción/error se silencia completamente."),
+
+        // Deprecated patterns
+        (new Regex(@"\bvar\s+\w",                            RegexOptions.Compiled), FindingSeverity.Low,      "Calidad de código", "Uso de 'var' — preferir 'const' o 'let' para scope explícito."),
+    ];
+
+    private static async Task<List<AnalysisFinding>> AnalyzeTypeScriptFilesAsync(
+        string[] files,
+        string clonePath,
+        Guid reportId,
+        CancellationToken ct)
+    {
+        var findings = new List<AnalysisFinding>();
+
+        foreach (var filePath in files)
+        {
+            try
+            {
+                var content = await File.ReadAllTextAsync(filePath, ct);
+                var relPath = filePath.Replace(clonePath, string.Empty).TrimStart('/', '\\');
+                var lines   = content.Split('\n');
+
+                // Per-file line count check — TSX/JSX components naturally include markup + logic,
+                // so the threshold is intentionally higher than for C# files.
+                if (lines.Length > 400)
+                {
+                    var severity = lines.Length > 700 ? FindingSeverity.High : FindingSeverity.Medium;
+                    findings.Add(new AnalysisFinding(
+                        reportId, severity, "Calidad de código",
+                        $"Archivo '{Path.GetFileName(filePath)}' tiene {lines.Length} líneas — dividir en módulos más pequeños.",
+                        relPath));
+                }
+
+                // Pattern-based checks — report first match per pattern per file
+                foreach (var (pattern, severity, category, message) in TsQualityPatterns)
+                {
+                    var match = pattern.Match(content);
+                    if (!match.Success) continue;
+
+                    // Find the line number of the first match
+                    var lineNumber = content[..match.Index].Count(c => c == '\n') + 1;
+                    findings.Add(new AnalysisFinding(reportId, severity, category, message, relPath, lineNumber));
+                }
+
+                // Function length check: count lines between function/arrow-function declarations
+                // Heuristic: look for patterns like "function foo(" or "const foo = (" and count until next top-level declaration
+                CheckTsFunctionLengths(content, lines, relPath, reportId, findings);
+            }
+            catch (Exception)
+            {
+                // tolerate read/parse failures — same policy as C# analyzer
+            }
+        }
+
+        return findings;
+    }
+
+    private static readonly Regex TsFunctionStartPattern = new(
+        @"^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*[\(<]|^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
+    private static void CheckTsFunctionLengths(
+        string content,
+        string[] lines,
+        string relPath,
+        Guid reportId,
+        List<AnalysisFinding> findings)
+    {
+        var matches = TsFunctionStartPattern.Matches(content);
+
+        for (var i = 0; i < matches.Count; i++)
+        {
+            var startLine = content[..matches[i].Index].Count(c => c == '\n');
+            var endLine   = i + 1 < matches.Count
+                ? content[..matches[i + 1].Index].Count(c => c == '\n')
+                : lines.Length - 1;
+
+            var length = endLine - startLine;
+            // TSX/JSX components include JSX markup, hooks, handlers and render logic together —
+            // 150 lines is a realistic threshold before it becomes a refactoring concern.
+            if (length < 150) continue;
+
+            var name   = matches[i].Groups[1].Success ? matches[i].Groups[1].Value
+                                                      : matches[i].Groups[2].Value;
+            var sev    = length > 300 ? FindingSeverity.High : FindingSeverity.Medium;
+
+            findings.Add(new AnalysisFinding(
+                reportId, sev, "Calidad de código",
+                $"Función '{name}' tiene ~{length} líneas — extraer en funciones más pequeñas.",
+                relPath, startLine + 1));
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Central gate for all file scans. Returns false for build output, sandboxes,
+    /// version-control internals, and package caches that should never be analyzed.
+    /// </summary>
+    private static bool IsAnalyzableFile(string filePath)
+    {
+        // NOTE: do NOT add \temp\ or \Temp\ — the clone root itself lives under the system Temp folder
+        // (e.g. C:\Users\...\AppData\Local\Temp\sentient-repos\{guid}\). Excluding \temp\ would
+        // make every file in every cloned repo invisible to the scanner.
+        var segments = new[]
+        {
+            @"\obj\",   "/obj/",
+            @"\bin\",   "/bin/",
+            @"\tmp\",   "/tmp/",   // repo-internal tmp folders only (not the system Temp root)
+            @"\.git\",  "/.git/",
+            @"\node_modules\", "/node_modules/",
+            @"\packages\",     "/packages/",
+            @"\vendor\",       "/vendor/",
+            // Exclude the analyzer's own Guardian folder so it doesn't flag its own detection patterns
+            @"\Guardian\",     "/Guardian/",
+        };
+
+        foreach (var seg in segments)
+            if (filePath.Contains(seg, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+        // Exclude Roslyn-generated designer files
+        if (filePath.EndsWith(".g.cs",         StringComparison.OrdinalIgnoreCase) ||
+            filePath.EndsWith(".designer.cs",   StringComparison.OrdinalIgnoreCase) ||
+            filePath.EndsWith(".generated.cs",  StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true for EF Core migration files. SQL raw is expected here — not a finding.
+    /// </summary>
+    private static bool IsMigrationFile(string filePath) =>
+        filePath.Contains(@"\Migrations\", StringComparison.OrdinalIgnoreCase) ||
+        filePath.Contains("/Migrations/",  StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns true for test project files — identified by common test folder/file naming conventions.
@@ -801,6 +1010,53 @@ public sealed class CodeAnalyzer(
         Path.GetFileName(filePath).EndsWith("Test.cs",     StringComparison.OrdinalIgnoreCase) ||
         Path.GetFileName(filePath).EndsWith("Specs.cs",    StringComparison.OrdinalIgnoreCase) ||
         Path.GetFileName(filePath).EndsWith("Fixture.cs",  StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns true for TypeScript/JavaScript test files — excluded from quality analysis.
+    /// Covers Jest, Vitest, Playwright, Cypress, and Storybook conventions.
+    /// </summary>
+    private static bool IsTypeScriptTestFile(string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        return filePath.Contains(@"\__tests__\",  StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/__tests__/",   StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\__mocks__\",  StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/__mocks__/",   StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\mocks\",      StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/mocks/",       StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\e2e\",         StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/e2e/",          StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".test.ts",       StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".test.tsx",      StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".test.js",       StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".spec.ts",       StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".spec.tsx",      StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".spec.js",       StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".stories.ts",    StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".stories.tsx",   StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".cy.ts",         StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".cy.js",         StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns true for generated/static web assets that should never be analyzed for quality.
+    /// Covers MSW service workers, Next.js generated files, bundler output in public/.
+    /// </summary>
+    private static bool IsGeneratedWebAsset(string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        return fileName.Equals("mockServiceWorker.js",  StringComparison.OrdinalIgnoreCase) ||
+               fileName.Equals("mockServiceWorker.ts",  StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".min.js",              StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".bundle.js",           StringComparison.OrdinalIgnoreCase) ||
+               fileName.EndsWith(".chunk.js",            StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\public\",            StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/public/",             StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\.next\",             StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/.next/",              StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains(@"\dist\",              StringComparison.OrdinalIgnoreCase) ||
+               filePath.Contains("/dist/",               StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Detects the primary programming language by counting source files per extension.

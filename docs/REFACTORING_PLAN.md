@@ -56,7 +56,28 @@ Auditoría del código existente reveló patrones funcionales pero desactualizad
 
 ### 🟢 Prioridad Baja (Mejoras futuras)
 
-#### 9. Evaluar ErrorOr vs Result casero
+#### 9. [Deuda técnica — detectado por Code Guardian 2026-04-11] Dividir ChatExecutionService
+
+- **Problema**: `ChatExecutionService` tiene 350 líneas y 9 dependencias en el constructor — viola SRP claramente. Hace demasiado: coordina el flujo deterministico, gestiona el contexto del consultor, orquesta plugins y maneja errores de provider.
+- **Propuesta**: Dividir en clases más pequeñas con responsabilidades únicas:
+  - `ConsultantContextBuilder` — ensambla contexto de usuario + historial + RAG
+  - `DeterministicFlowRunner` — ejecuta el flujo de análisis determinístico
+  - `ChatExecutionService` — coordinador delgado que delega a los anteriores
+- **Archivos afectados**: `src/SentientArchitect.Infrastructure/Chat/ChatExecutionService.cs`
+- **Estado**: ⬜ Pendiente
+
+#### 10. [Deuda técnica — detectado por Code Guardian 2026-04-11] Dividir TrendScanner
+
+- **Problema**: `TrendScanner` tiene 542 líneas — una sola clase que hace fetching, parsing y persistencia de múltiples fuentes (Dev.to, Hacker News, RSS).
+- **Propuesta**: Dividir por responsabilidad:
+  - `TrendFetcher` — HTTP calls a fuentes externas (Dev.to, HN, RSS)
+  - `TrendParser` — parseo y normalización de respuestas por formato
+  - `TrendPersister` — deduplicación y guardado en DB / knowledge base
+  - `TrendScanner` — orquestador que coordina los tres anteriores
+- **Archivos afectados**: `src/SentientArchitect.Infrastructure/BackgroundJobs/TrendScanner.cs`
+- **Estado**: ⬜ Pendiente
+
+#### 11. Evaluar ErrorOr vs Result casero
 - **Problema**: Result pattern actual tiene constructor parameterless, `List<string>` mutable
 - **Solución**: Evaluar migración a ErrorOr (amantinband) o mejorar el Result existente
 - **Estado**: Pendiente de decisión
@@ -91,8 +112,10 @@ Auditoría del código existente reveló patrones funcionales pero desactualizad
 6. ⬜ Value Objects (TechStack, PatternList)
 7. ✅ Métodos de comportamiento en entidades
 8. ✅ IVectorStore scope fix (userId + tenantId + includeShared)
-9. ⬜ Evaluar ErrorOr
-10. ⬜ Vertical slices (cuando arranque implementación)
+9. ⬜ Dividir ChatExecutionService (Guardian 2026-04-11)
+10. ⬜ Dividir TrendScanner (Guardian 2026-04-11)
+11. ⬜ Evaluar ErrorOr
+12. ⬜ Vertical slices (cuando arranque implementación)
 
 ---
 

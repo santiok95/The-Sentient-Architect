@@ -12,7 +12,7 @@
  * via JoinRepository after the hub connects.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, AlertCircle, Loader2, Terminal } from 'lucide-react'
 import { HubConnectionState } from '@microsoft/signalr'
 import { cn } from '@/lib/utils'
@@ -44,6 +44,17 @@ export function AnalysisLiveLog({ repositoryId, isAnalyzing, onComplete }: Props
     setIsComplete(false)
     setHasError(null)
   }, [repositoryId])
+
+  // Reset log when a new analysis starts (re-analyze from same repositoryId)
+  const prevAnalyzingRef = useRef(false)
+  useEffect(() => {
+    if (isAnalyzing && !prevAnalyzingRef.current) {
+      setLog([])
+      setIsComplete(false)
+      setHasError(null)
+    }
+    prevAnalyzingRef.current = isAnalyzing
+  }, [isAnalyzing])
 
   const handleProgress = useCallback(
     (percent: number, status: string) => {

@@ -145,7 +145,10 @@ export function GuardianView() {
           onComplete={handleAnalysisComplete}
         />
         {activeRepoId && activeRepo?.processingStatus === 'Completed' ? (
-          <AnalysisReport repositoryId={activeRepoId} />
+          <AnalysisReport
+            repositoryId={activeRepoId}
+            onReanalyze={() => setAnalyzingRepoId(activeRepoId)}
+          />
         ) : !activeRepoId ? (
           <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
             <div className="text-center">

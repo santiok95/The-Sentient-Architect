@@ -1,9 +1,10 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Loader2, ShieldAlert, ShieldCheck, Wrench, TrendingUp } from 'lucide-react'
+import { RefreshCw, Loader2, ShieldAlert, ShieldCheck, Wrench, TrendingUp, Copy, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -83,12 +84,15 @@ function ScoreGauge({ label, score, icon }: { label: string; score: number; icon
 
 interface Props {
   repositoryId: string
+  onReanalyze?: () => void
 }
 
-export function AnalysisReport({ repositoryId }: Props) {
+export function AnalysisReport({ repositoryId, onReanalyze }: Props) {
   const queryClient = useQueryClient()
   const { data: analysis, isLoading: loadingAnalysis } = useRepositoryAnalysis(repositoryId)
-  const latestReport = analysis?.reports[0]
+  // Use the most recent COMPLETED report — otherwise a new Processing report (0 findings)
+  // from a re-analyze would replace the previous results before the new run finishes.
+  const latestReport = analysis?.reports.find(r => r.status === 'Completed')
   const { data: findingsData, isLoading: loadingFindings } = useFindings(
     repositoryId,
     latestReport?.id ?? null,
@@ -97,6 +101,7 @@ export function AnalysisReport({ repositoryId }: Props) {
   const { execute: reanalyze, isPending: isReanalyzing } = useAction(reanalyzeAction, {
     onSuccess: () => {
       toast.success('Re-análisis solicitado')
+      onReanalyze?.()
       queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.analysis(repositoryId) })
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Error al re-analizar'),
@@ -200,6 +205,47 @@ export function AnalysisReport({ repositoryId }: Props) {
       </div>
 
       {/* Findings table */}
+      <FindingsTable findings={findingsData?.items ?? []} loading={loadingFindings} />
+    </div>
+  )
+}
+
+function FindingsTable({ findings, loading }: { findings: Finding[]; loading: boolean }) {
+  const [copied, setCopied] = useState(false)
+
+  const copyToClipboard = useCallback(() => {
+    if (findings.length === 0) return
+    const header = 'Severidad\tCategoría\tHallazgo\tArchivo'
+    const rows = findings.map((f) =>
+      [
+        f.severity,
+        f.category,
+        [f.title, f.description].filter(Boolean).join(' — '),
+        f.filePath ?? '',
+      ].join('\t'),
+    )
+    navigator.clipboard.writeText([header, ...rows].join('\n')).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [findings])
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+        <span className="text-xs font-medium text-muted-foreground">
+          {loading ? '…' : `${findings.length} hallazgos`}
+        </span>
+        <button
+          onClick={copyToClipboard}
+          disabled={loading || findings.length === 0}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          {copied
+            ? <><Check className="h-3.5 w-3.5 text-emerald-400" /><span className="text-emerald-400">Copiado</span></>
+            : <><Copy className="h-3.5 w-3.5" />Copiar tabla</>}
+        </button>
+      </div>
       <div className="rounded-lg border border-border overflow-hidden">
         <Table>
           <TableHeader>
@@ -211,7 +257,7 @@ export function AnalysisReport({ repositoryId }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loadingFindings
+            {loading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>
@@ -220,7 +266,7 @@ export function AnalysisReport({ repositoryId }: Props) {
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   </TableRow>
                 ))
-              : (findingsData?.items ?? []).map((finding: Finding) => {
+              : findings.map((finding: Finding) => {
                   const cfg = SEVERITY_CONFIG[finding.severity]
                   return (
                     <TableRow key={finding.id} className="align-top">
