@@ -87,20 +87,30 @@ export function SubmitRepoForm({ onSubmitted }: Props = {}) {
               control={form.control}
               render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="External">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-3.5 w-3.5 text-amber-400" />
-                        External — análisis de seguridad completo
+                  <SelectContent sideOffset={4} align="start" className="w-[var(--anchor-width)]">
+                    <SelectItem value="External" className="py-2 px-2">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-3.5 w-3.5 text-amber-500" />
+                          <span className="font-medium text-sm">External</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground ml-5.5 leading-tight">
+                          Análisis de seguridad y cumplimiento completo
+                        </span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="Internal">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-3.5 w-3.5 text-emerald-400" />
-                        Internal — enfocado en calidad
+                    <SelectItem value="Internal" className="py-2 px-2">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="font-medium text-sm">Internal</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground ml-5.5 leading-tight">
+                          Enfocado en calidad de código y diseño
+                        </span>
                       </div>
                     </SelectItem>
                   </SelectContent>
