@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { RefreshCw, Loader2, ShieldAlert, ShieldCheck, Wrench, TrendingUp, Copy, Check } from 'lucide-react'
+import { RefreshCw, Loader2, ShieldAlert, ShieldCheck, Copy, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -49,37 +49,6 @@ const SEVERITY_CONFIG: Record<
     className: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
     icon: <ShieldCheck className="h-3 w-3" />,
   },
-}
-
-function ScoreGauge({ label, score, icon }: { label: string; score: number; icon: React.ReactNode }) {
-  const color =
-    score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'
-  const bgColor =
-    score >= 80 ? 'bg-emerald-500/20' : score >= 60 ? 'bg-amber-500/20' : 'bg-red-500/20'
-
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4">
-      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', bgColor)}>
-        <span className={cn('text-xl', color)}>{icon}</span>
-      </div>
-      <div className="text-center">
-        <p className={cn('text-2xl font-bold font-mono', color)}>
-          {score.toFixed(0)}
-        </p>
-        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-      </div>
-      {/* Progress bar */}
-      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-full transition-all',
-            score >= 80 ? 'bg-emerald-400' : score >= 60 ? 'bg-amber-400' : 'bg-red-400',
-          )}
-          style={{ width: `${score}%` }}
-        />
-      </div>
-    </div>
-  )
 }
 
 interface Props {
@@ -160,28 +129,6 @@ export function AnalysisReport({ repositoryId, onReanalyze }: Props) {
       </div>
 
       {/* Score gauges */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <ScoreGauge
-          label="General"
-          score={latestReport.overallHealthScore}
-          icon={<TrendingUp className="h-5 w-5" />}
-        />
-        <ScoreGauge
-          label="Seguridad"
-          score={latestReport.securityScore}
-          icon={<ShieldAlert className="h-5 w-5" />}
-        />
-        <ScoreGauge
-          label="Calidad"
-          score={latestReport.qualityScore}
-          icon={<ShieldCheck className="h-5 w-5" />}
-        />
-        <ScoreGauge
-          label="Mantenibilidad"
-          score={latestReport.maintainabilityScore}
-          icon={<Wrench className="h-5 w-5" />}
-        />
-      </div>
 
       {/* Findings summary */}
       <div className="flex gap-3 flex-wrap">
