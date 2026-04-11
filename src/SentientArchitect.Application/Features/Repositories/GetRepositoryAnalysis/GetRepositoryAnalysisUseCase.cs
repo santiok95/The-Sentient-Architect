@@ -53,7 +53,7 @@ public class GetRepositoryAnalysisUseCase(IApplicationDbContext db)
 
         var repoInfo = new RepositoryInfoSummary(
             GitUrl:          repo.RepositoryUrl,
-            PrimaryLanguage: null,
+            PrimaryLanguage: repo.PrimaryLanguage,
             TrustLevel:      repo.Trust.ToString(),
             Stars:           repo.StarCount,
             LastCommitDate:  repo.LastCommitAt?.ToString("o"));

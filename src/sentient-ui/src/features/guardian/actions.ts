@@ -55,5 +55,6 @@ export const reanalyzeAction = authedActionClient
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail ?? 'Error al solicitar re-análisis')
     }
-    return res.json()
+    // 202 Accepted — no body
+    return {}
   })

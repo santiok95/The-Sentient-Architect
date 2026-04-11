@@ -12,7 +12,7 @@
  * via JoinRepository after the hub connects.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, AlertCircle, Loader2, Terminal } from 'lucide-react'
 import { HubConnectionState } from '@microsoft/signalr'
 import { cn } from '@/lib/utils'
@@ -37,7 +37,6 @@ export function AnalysisLiveLog({ repositoryId, isAnalyzing, onComplete }: Props
   const [log, setLog] = useState<LogEntry[]>([])
   const [isComplete, setIsComplete] = useState(false)
   const [hasError, setHasError] = useState<string | null>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
   // Reset log when repositoryId changes
   useEffect(() => {
@@ -45,11 +44,6 @@ export function AnalysisLiveLog({ repositoryId, isAnalyzing, onComplete }: Props
     setIsComplete(false)
     setHasError(null)
   }, [repositoryId])
-
-  // Auto-scroll to latest entry
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [log])
 
   const handleProgress = useCallback(
     (percent: number, status: string) => {
@@ -224,7 +218,6 @@ export function AnalysisLiveLog({ repositoryId, isAnalyzing, onComplete }: Props
           </div>
         )}
 
-        <div ref={bottomRef} />
       </div>
     </div>
   )
