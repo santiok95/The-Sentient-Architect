@@ -26,11 +26,15 @@ export const submitRepoAction = authedActionClient
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail ?? 'Error al enviar el repositorio')
     }
-    return res.json() as Promise<{
-      knowledgeItemId: string
-      repositoryInfoId: string
-      processingStatus: string
-    }>
+    const created = await res.json() as { repositoryId: string; repositoryUrl: string }
+
+    // Trigger background analysis (fire-and-forget — backend returns 202 immediately)
+    fetch(`${BASE_URL}/api/v1/repositories/${created.repositoryId}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ctx.token}` },
+    }).catch(() => {/* best-effort — backend logs internally */})
+
+    return created
   })
 
 // ─── Reanalyze Repository ─────────────────────────────────────────────────────

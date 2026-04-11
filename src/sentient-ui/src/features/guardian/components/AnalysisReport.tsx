@@ -29,22 +29,22 @@ const SEVERITY_CONFIG: Record<
   { label: string; className: string; icon: React.ReactNode }
 > = {
   Critical: {
-    label: 'Critical',
+    label: 'Crítico',
     className: 'bg-red-500/20 text-red-400 border-red-500/30',
     icon: <ShieldAlert className="h-3 w-3" />,
   },
   High: {
-    label: 'High',
+    label: 'Alto',
     className: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
     icon: <ShieldAlert className="h-3 w-3" />,
   },
   Medium: {
-    label: 'Medium',
+    label: 'Medio',
     className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     icon: <ShieldCheck className="h-3 w-3" />,
   },
   Low: {
-    label: 'Low',
+    label: 'Bajo',
     className: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
     icon: <ShieldCheck className="h-3 w-3" />,
   },
@@ -157,7 +157,7 @@ export function AnalysisReport({ repositoryId }: Props) {
       {/* Score gauges */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <ScoreGauge
-          label="Overall"
+          label="General"
           score={latestReport.overallHealthScore}
           icon={<TrendingUp className="h-5 w-5" />}
         />
@@ -193,7 +193,7 @@ export function AnalysisReport({ repositoryId }: Props) {
               )}
             >
               {cfg.icon}
-              <span className="text-xs font-medium">{count} {sev}</span>
+              <span className="text-xs font-medium">{count} {cfg.label}</span>
             </div>
           )
         })}
@@ -227,7 +227,7 @@ export function AnalysisReport({ repositoryId }: Props) {
                       <TableCell>
                         <Badge variant="outline" className={cn('text-xs gap-1', cfg.className)}>
                           {cfg.icon}
-                          {finding.severity}
+                          {cfg.label}
                         </Badge>
                       </TableCell>
                       <TableCell>

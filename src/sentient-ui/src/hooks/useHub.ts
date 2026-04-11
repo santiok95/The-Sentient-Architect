@@ -12,7 +12,7 @@
  * The connection is only stopped explicitly on logout (lib/auth.ts).
  */
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { HubConnectionState } from '@microsoft/signalr'
 import { getHubConnection, startHub, type HubName } from '@/lib/signalr'
 import { useUiStore } from '@/store/ui-store'
@@ -29,6 +29,16 @@ export function useHub(hubName: HubName, options: UseHubOptions = {}) {
   // Keep handlers in a ref so we can remove them exactly
   const handlersRef = useRef<HandlerMap>(options.handlers ?? {})
   handlersRef.current = options.handlers ?? {}
+
+  const invoke = useCallback(
+    async (method: string, ...args: unknown[]) => {
+      const connection = getHubConnection(hubName)
+      if (connection.state === HubConnectionState.Connected) {
+        await connection.invoke(method, ...args)
+      }
+    },
+    [hubName],
+  )
 
   useEffect(() => {
     const connection = getHubConnection(hubName)
@@ -77,4 +87,6 @@ export function useHub(hubName: HubName, options: UseHubOptions = {}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hubName])
+
+  return { invoke }
 }

@@ -1,6 +1,7 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { GitFork, Clock, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { SubmitRepoForm } from '@/features/guardian/components/SubmitRepoForm'
 import { AnalysisReport } from '@/features/guardian/components/AnalysisReport'
 import { AnalysisLiveLog } from '@/features/guardian/components/AnalysisLiveLog'
-import { useRepositories, type RepositorySummary } from '@/features/guardian/hooks/useRepositories'
+import { useRepositories, REPOSITORY_KEYS, type RepositorySummary } from '@/features/guardian/hooks/useRepositories'
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; className: string }> = {
   Completed: {
@@ -85,19 +86,30 @@ function RepoCard({
 }
 
 export function GuardianView() {
+  const queryClient = useQueryClient()
   const [activeRepoId, setActiveRepoId] = useState<string | null>(null)
+  const [analyzingRepoId, setAnalyzingRepoId] = useState<string | null>(null)
   const { data, isLoading } = useRepositories()
 
   const repos = data?.items ?? []
+  const activeRepo = repos.find((r) => r.id === activeRepoId)
+  const isAnalyzing = analyzingRepoId === activeRepoId
+
+  function handleAnalysisComplete(_reportId: string) {
+    setAnalyzingRepoId(null)
+    queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.list() })
+    queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.analysis(activeRepoId ?? '') })
+  }
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
-      {/* Left column */}
       <div className="space-y-4">
-        {/* Submit form */}
-        <SubmitRepoForm />
-
-        {/* Repo list */}
+        <SubmitRepoForm
+          onSubmitted={(repoId) => {
+            setActiveRepoId(repoId)
+            setAnalyzingRepoId(repoId)
+          }}
+        />
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-0.5">
             Repositorios analizados
@@ -111,7 +123,7 @@ export function GuardianView() {
                   <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-8">
                     <div className="text-center">
                       <GitFork className="mx-auto h-8 w-8 text-muted-foreground/40" />
-                      <p className="mt-2 text-sm text-muted-foreground">Sin repositorios todavía</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Sin repositorios todavia</p>
                     </div>
                   </div>
                 )
@@ -120,34 +132,30 @@ export function GuardianView() {
                     key={repo.id}
                     repo={repo}
                     isActive={activeRepoId === repo.id}
-                    onClick={() => {
-                      if (repo.processingStatus === 'Completed') {
-                        setActiveRepoId(repo.id)
-                      }
-                    }}
+                    onClick={() => setActiveRepoId(repo.id)}
                   />
                 ))}
         </div>
       </div>
 
-      {/* Right column: analysis */}
       <div className="min-w-0 space-y-4">
         <AnalysisLiveLog
           repositoryId={activeRepoId}
-          onComplete={() => {}}
+          isAnalyzing={isAnalyzing}
+          onComplete={handleAnalysisComplete}
         />
-        {activeRepoId ? (
+        {activeRepoId && activeRepo?.processingStatus === 'Completed' ? (
           <AnalysisReport repositoryId={activeRepoId} />
-        ) : (
+        ) : !activeRepoId ? (
           <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
             <div className="text-center">
               <GitFork className="mx-auto h-10 w-10 text-muted-foreground/30" />
               <p className="mt-3 text-sm text-muted-foreground">
-                Seleccioná un repositorio completado para ver el análisis
+                Selecciona un repositorio para ver el analisis
               </p>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

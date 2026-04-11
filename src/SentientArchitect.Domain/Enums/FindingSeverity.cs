@@ -2,8 +2,8 @@ namespace SentientArchitect.Domain.Enums;
 
 public enum FindingSeverity
 {
-    Info = 0,
-    Warning = 1,
-    Error = 2,
+    Low = 0,
+    Medium = 1,
+    High = 2,
     Critical = 3
 }

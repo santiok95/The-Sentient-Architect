@@ -25,6 +25,7 @@ public class RepositoryInfo : BaseEntity
     public string? LocalPath { get; private set; }
     public RepositoryTrust Trust { get; private set; }
     public string? DefaultBranch { get; private set; }
+    public string? PrimaryLanguage { get; private set; }
     public int? StarCount { get; private set; }
     public int? ContributorCount { get; private set; }
     public DateTime? LastCommitAt { get; private set; }
@@ -48,6 +49,11 @@ public class RepositoryInfo : BaseEntity
         StarCount = stars;
         ContributorCount = contributors;
         LastCommitAt = lastCommit;
+    }
+
+    public void UpdatePrimaryLanguage(string language)
+    {
+        PrimaryLanguage = language;
     }
 
     public void MarkAnalyzed()

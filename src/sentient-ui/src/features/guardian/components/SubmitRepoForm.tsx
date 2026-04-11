@@ -25,7 +25,11 @@ import { REPOSITORY_KEYS } from '../hooks/useRepositories'
 
 type SubmitRepoValues = z.infer<typeof submitRepoSchema>
 
-export function SubmitRepoForm() {
+interface Props {
+  onSubmitted?: (repositoryId: string) => void
+}
+
+export function SubmitRepoForm({ onSubmitted }: Props = {}) {
   const queryClient = useQueryClient()
   const form = useForm<SubmitRepoValues>({
     resolver: zodResolver(submitRepoSchema),
@@ -37,10 +41,11 @@ export function SubmitRepoForm() {
   })
 
   const { execute, isPending } = useAction(submitRepoAction, {
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       toast.success('Repositorio enviado. Análisis en cola.')
       queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.all })
       form.reset()
+      if (data?.repositoryId) onSubmitted?.(data.repositoryId)
     },
     onError: ({ error }) =>
       toast.error(error.serverError ?? 'Error al enviar el repositorio'),

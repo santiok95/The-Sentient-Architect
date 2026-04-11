@@ -44,9 +44,9 @@ public class GetAnalysisReportUseCase(IApplicationDbContext db)
     private static string MapSeverity(FindingSeverity severity) => severity switch
     {
         FindingSeverity.Critical => "Critical",
-        FindingSeverity.Error    => "High",
-        FindingSeverity.Warning  => "Medium",
-        FindingSeverity.Info     => "Low",
+        FindingSeverity.High     => "High",
+        FindingSeverity.Medium   => "Medium",
+        FindingSeverity.Low      => "Low",
         _                        => severity.ToString(),
     };
 }

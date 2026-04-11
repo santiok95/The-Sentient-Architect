@@ -64,9 +64,9 @@ public class GetRepositoryAnalysisUseCase(IApplicationDbContext db)
             {
                 var findings = r.Findings.ToList();
                 var critical = findings.Count(f => f.Severity == FindingSeverity.Critical);
-                var high     = findings.Count(f => f.Severity == FindingSeverity.Error);
-                var medium   = findings.Count(f => f.Severity == FindingSeverity.Warning);
-                var low      = findings.Count(f => f.Severity == FindingSeverity.Info);
+                var high     = findings.Count(f => f.Severity == FindingSeverity.High);
+                var medium   = findings.Count(f => f.Severity == FindingSeverity.Medium);
+                var low      = findings.Count(f => f.Severity == FindingSeverity.Low);
 
                 // Derive scores from findings when dedicated score fields are not available
                 var penalty = (critical * 25f) + (high * 10f) + (medium * 3f) + (low * 0.5f);

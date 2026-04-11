@@ -75,7 +75,7 @@ public class RepositoryContextPluginTests
 
         var directCtxFinding = new AnalysisFinding(
             report.Id,
-            FindingSeverity.Info,
+            FindingSeverity.Low,
             "Architecture",
             "Direct DbContext/IApplicationDbContext injection used in 7 file(s). " +
             "do NOT recommend adding a repository abstraction layer on top.");

@@ -18,47 +18,36 @@ public class CodeAnalyzerPatternDetectionTests : IDisposable
     public void Dispose()
         => Directory.Delete(_tempDir, recursive: true);
 
-    // ── Direct DbContext injection ─────────────────────────────────────────────
+    // ── Repository pattern conflict ───────────────────────────────────────────
 
     [Fact]
-    public async Task Detect_DirectDbContextInjection_WhenConstructorTakesApplicationDbContext()
+    public async Task Detect_RepositoryConflict_WhenRepoInterfaceAndDbContextCoexist()
     {
-        var file = WriteCs("UseCase.cs", """
-            public class MyUseCase(IApplicationDbContext db)
+        // Both IXxxRepository and direct DbContext injection — conflicting conventions
+        var repoFile = WriteCs("IOrderRepository.cs", """
+            public interface IOrderRepository
             {
-                public void Do() => db.SaveChangesAsync(default);
+                Task<Order?> GetByIdAsync(Guid id);
             }
             """);
-
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
-
-        findings.Should().Contain(f =>
-            f.Category == "Architecture" &&
-            f.Message.Contains("DbContext") &&
-            f.Message.Contains("do NOT recommend"));
-    }
-
-    [Fact]
-    public async Task Detect_DirectDbContextInjection_WhenConstructorTakesXxxContext()
-    {
-        var file = WriteCs("Handler.cs", """
-            public class OrderHandler(AppDbContext context)
+        var useCaseFile = WriteCs("CreateOrderUseCase.cs", """
+            public class CreateOrderUseCase(AppDbContext db)
             {
                 public void Handle() { }
             }
             """);
 
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
+        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync(
+            [repoFile, useCaseFile], _tempDir, _reportId, default);
 
         findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("DbContext"));
+            f.Category == "Arquitectura" && f.Message.Contains("inconsistente"));
     }
 
-    // ── Repository pattern ────────────────────────────────────────────────────
-
     [Fact]
-    public async Task Detect_RepositoryInterface_WhenInterfaceNameMatchesIXxxRepository()
+    public async Task NoFinding_WhenOnlyRepositoryInterfaceWithNoDbContextConflict()
     {
+        // Repository-only project — no conflict, no noise
         var file = WriteCs("IOrderRepository.cs", """
             public interface IOrderRepository
             {
@@ -66,32 +55,40 @@ public class CodeAnalyzerPatternDetectionTests : IDisposable
             }
             """);
 
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
+        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _tempDir, _reportId, default);
 
-        findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("Repository pattern detected"));
+        findings.Should().NotContain(f => f.Category == "Arquitectura" && f.Message.Contains("inconsistente"));
     }
 
+    // ── API style ─────────────────────────────────────────────────────────────
+
     [Fact]
-    public async Task Detect_RepositoryClass_WhenClassNameEndsWithRepository()
+    public async Task Detect_MixedApiStyle_WhenBothMinimalApiAndControllersExist()
     {
-        var file = WriteCs("OrderRepository.cs", """
-            public class OrderRepository : IOrderRepository
+        var minimalFile = WriteCs("OrderEndpoints.cs", """
+            public static class OrderEndpoints
             {
-                public Task<Order?> GetByIdAsync(Guid id) => Task.FromResult<Order?>(null);
+                public static void Map(WebApplication app)
+                    => app.MapGet("/orders", () => Results.Ok());
+            }
+            """);
+        var controllerFile = WriteCs("ProductsController.cs", """
+            [ApiController]
+            public class ProductsController : ControllerBase
+            {
+                public IActionResult Get() => Ok();
             }
             """);
 
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
+        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync(
+            [minimalFile, controllerFile], _tempDir, _reportId, default);
 
         findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("Repository class"));
+            f.Category == "Arquitectura" && f.Message.Contains("mixto"));
     }
 
-    // ── Minimal API ───────────────────────────────────────────────────────────
-
     [Fact]
-    public async Task Detect_MinimalApi_WhenMapGetIsUsed()
+    public async Task NoFinding_WhenOnlyMinimalApiIsUsed()
     {
         var file = WriteCs("Endpoints.cs", """
             public static class OrderEndpoints
@@ -104,42 +101,26 @@ public class CodeAnalyzerPatternDetectionTests : IDisposable
             }
             """);
 
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
+        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _tempDir, _reportId, default);
 
-        findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("Minimal API"));
+        // Pure Minimal API is fine — no noise
+        findings.Should().NotContain(f => f.Category == "Arquitectura" && f.Message.Contains("mixto"));
     }
 
     // ── Vertical Slice / Feature folder ──────────────────────────────────────
 
     [Fact]
-    public async Task Detect_VerticalSlice_WhenFileIsUnderFeaturesFolder()
-    {
-        var featuresDir = Path.Combine(_tempDir, "Features", "Orders");
-        Directory.CreateDirectory(featuresDir);
-        var file = Path.Combine(featuresDir, "CreateOrderUseCase.cs");
-        await File.WriteAllTextAsync(file, "public class CreateOrderUseCase { }");
-
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
-
-        findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("Vertical Slice"));
-    }
-
-    // ── Clean Architecture layers ─────────────────────────────────────────────
-
-    [Fact]
     public async Task Detect_CleanArchitecture_WhenFilesSpanMultipleLayers()
     {
-        var domainFile = WriteCs("Domain/Entity.cs",      "public class Order { }");
-        var appFile    = WriteCs("Application/UseCase.cs", "public class CreateOrder { }");
-        var infraFile  = WriteCs("Infrastructure/Service.cs", "public class EmailService { }");
+        var domainFile = WriteCs("Domain/Entity.cs",         "public class Order { }");
+        var appFile    = WriteCs("Application/UseCase.cs",   "public class CreateOrder { }");
+        var infraFile  = WriteCs("Infrastructure/Service.cs","public class EmailService { }");
 
+        // No finding expected — Clean Architecture is fine, no noise
         var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync(
-            [domainFile, appFile, infraFile], _reportId, default);
+            [domainFile, appFile, infraFile], _tempDir, _reportId, default);
 
-        findings.Should().Contain(f =>
-            f.Category == "Architecture" && f.Message.Contains("Clean Architecture"));
+        findings.Should().NotContain(f => f.Category == "Arquitectura" && f.Severity == SentientArchitect.Domain.Enums.FindingSeverity.Medium);
     }
 
     // ── No false positives ────────────────────────────────────────────────────
@@ -154,10 +135,9 @@ public class CodeAnalyzerPatternDetectionTests : IDisposable
             }
             """);
 
-        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _reportId, default);
+        var findings = await CodeAnalyzer.DetectArchitecturalPatternsAsync([file], _tempDir, _reportId, default);
 
-        // RepositoryInfo is a domain entity — not the repository pattern
-        findings.Should().NotContain(f => f.Message.Contains("Repository class implementations"));
+        findings.Should().NotContain(f => f.Message.Contains("inconsistente"));
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────
