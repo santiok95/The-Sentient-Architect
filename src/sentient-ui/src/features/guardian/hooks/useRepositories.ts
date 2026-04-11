@@ -7,27 +7,28 @@ import { apiClient } from '@/lib/api-client'
 
 export interface RepositorySummary {
   id: string
-  knowledgeItemId: string
   gitUrl: string
   primaryLanguage?: string
-  trustLevel: 'External' | 'Internal'
+  trustLevel: string
   stars?: number
-  openIssues?: number
   lastCommitDate?: string
-  processingStatus: 'Pending' | 'Processing' | 'Completed' | 'Failed'
+  processingStatus: string
   scope: 'Personal' | 'Shared'
   createdAt: string
 }
 
 export interface AnalysisReport {
   id: string
-  analysisType: string
+  status: string
+  summary?: string
+  totalFindings: number
+  criticalFindings: number
+  findingsCount: { critical: number; high: number; medium: number; low: number }
   overallHealthScore: number
   securityScore: number
   qualityScore: number
   maintainabilityScore: number
-  findingsCount: { critical: number; high: number; medium: number; low: number }
-  executedAt: string
+  executedAt?: string
   analysisDurationSeconds: number
 }
 
@@ -37,7 +38,6 @@ export interface RepositoryAnalysis {
     primaryLanguage?: string
     trustLevel: string
     stars?: number
-    openIssues?: number
     lastCommitDate?: string
   }
   reports: AnalysisReport[]
@@ -48,10 +48,19 @@ export interface Finding {
   severity: 'Critical' | 'High' | 'Medium' | 'Low'
   category: string
   title: string
-  description: string
+  description?: string
   filePath?: string
-  recommendation?: string
   isResolved: boolean
+}
+
+// Raw shape from GetAnalysisReportResponse.Findings
+interface RawFinding {
+  id?: string
+  severity: string
+  category: string
+  message?: string
+  title?: string
+  filePath?: string
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -74,35 +83,54 @@ export function useRepositories() {
         '/api/v1/repositories',
       )
       if (!res.ok) throw new Error(res.error ?? 'Error fetching repositories')
-      return res.data
+      const raw = res.data
+      if (!raw) return { items: [] as RepositorySummary[], totalCount: 0 }
+      // Backend may return a plain array or a paged object
+      const items: RepositorySummary[] = Array.isArray(raw)
+        ? (raw as RepositorySummary[])
+        : raw.items ?? []
+      return { items, totalCount: raw.totalCount ?? items.length }
     },
   })
 }
 
-export function useRepositoryAnalysis(knowledgeItemId: string | null) {
+export function useRepositoryAnalysis(repositoryId: string | null) {
   return useQuery({
-    queryKey: REPOSITORY_KEYS.analysis(knowledgeItemId ?? ''),
+    queryKey: REPOSITORY_KEYS.analysis(repositoryId ?? ''),
     queryFn: async () => {
       const res = await apiClient.get<RepositoryAnalysis>(
-        `/api/v1/repositories/${knowledgeItemId}/analysis`,
+        `/api/v1/repositories/${repositoryId}/analysis`,
       )
       if (!res.ok) throw new Error(res.error ?? 'Error fetching analysis')
       return res.data
     },
-    enabled: !!knowledgeItemId,
+    enabled: !!repositoryId,
   })
 }
 
-export function useFindings(knowledgeItemId: string | null, reportId: string | null) {
+export function useFindings(repositoryId: string | null, reportId: string | null) {
   return useQuery({
-    queryKey: REPOSITORY_KEYS.findings(knowledgeItemId ?? '', reportId ?? ''),
+    queryKey: REPOSITORY_KEYS.findings(repositoryId ?? '', reportId ?? ''),
     queryFn: async () => {
+      // Backend endpoint: GET /api/v1/repositories/reports/{reportId}
       const res = await apiClient.get<{ items: Finding[]; totalCount: number }>(
-        `/api/v1/repositories/${knowledgeItemId}/analysis/${reportId}/findings`,
+        `/api/v1/repositories/reports/${reportId}`,
       )
       if (!res.ok) throw new Error(res.error ?? 'Error fetching findings')
-      return res.data
+      // Backend returns GetAnalysisReportResponse with a Findings array; normalize it
+      const data = res.data as unknown as { findings?: RawFinding[]; items?: Finding[]; totalCount?: number }
+      const rawFindings: RawFinding[] = data?.findings ?? []
+      const items: Finding[] = rawFindings.map((f) => ({
+        id: f.id ?? crypto.randomUUID(),
+        severity: f.severity as Finding['severity'],
+        category: f.category,
+        title: f.message ?? f.title ?? '',
+        description: undefined,
+        filePath: f.filePath,
+        isResolved: false,
+      }))
+      return { items, totalCount: data?.totalCount ?? items.length }
     },
-    enabled: !!knowledgeItemId && !!reportId,
+    enabled: !!repositoryId && !!reportId,
   })
 }

@@ -11,11 +11,19 @@ import {
   HubConnection,
   HubConnectionBuilder,
   HubConnectionState,
+  HttpTransportType,
   LogLevel,
 } from '@microsoft/signalr'
 import { getToken } from './auth'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+
+// When the API is on plain HTTP, WebSocket and SSE upgrades get redirected to
+// HTTPS by ASP.NET's UseHttpsRedirection middleware and fail silently.
+// Skip the noisy fallback attempts and go straight to LongPolling.
+const transport = BASE_URL.startsWith('http://')
+  ? HttpTransportType.LongPolling
+  : undefined // auto-negotiate (WS preferred) on HTTPS
 
 export type HubName = 'conversation' | 'ingestion' | 'analysis'
 
@@ -40,6 +48,7 @@ export function getHubConnection(hubName: HubName): HubConnection {
   const connection = new HubConnectionBuilder()
     .withUrl(`${BASE_URL}${HUB_PATHS[hubName]}`, {
       accessTokenFactory: () => getToken() ?? '',
+      transport,
     })
     .withAutomaticReconnect({
       nextRetryDelayInMilliseconds: (retryContext) => {
@@ -49,7 +58,9 @@ export function getHubConnection(hubName: HubName): HubConnection {
       },
     })
     .configureLogging(
-      process.env.NODE_ENV === 'development' ? LogLevel.Information : LogLevel.Warning,
+      // On HTTP dev (local), transport negotiation attempts produce expected
+      // WS/SSE failures that are noise — silence them. On HTTPS (prod) log warnings.
+      BASE_URL.startsWith('http://') ? LogLevel.None : LogLevel.Warning,
     )
     .build()
 

@@ -35,13 +35,13 @@ export const submitRepoAction = authedActionClient
 
 // ─── Reanalyze Repository ─────────────────────────────────────────────────────
 
-const reanalyzeSchema = z.object({ knowledgeItemId: z.string().uuid() })
+const reanalyzeSchema = z.object({ repositoryId: z.string().uuid() })
 
 export const reanalyzeAction = authedActionClient
   .schema(reanalyzeSchema)
   .action(async ({ parsedInput, ctx }) => {
     const res = await fetch(
-      `${BASE_URL}/api/v1/repositories/${parsedInput.knowledgeItemId}/analyze`,
+      `${BASE_URL}/api/v1/repositories/${parsedInput.repositoryId}/analyze`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${ctx.token}` },

@@ -4,6 +4,7 @@ using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Repositories.GetAnalysisReport;
 using SentientArchitect.Application.Features.Repositories.GetRepositories;
+using SentientArchitect.Application.Features.Repositories.GetRepositoryAnalysis;
 using SentientArchitect.Application.Features.Repositories.GetRepositoryReports;
 using SentientArchitect.Application.Features.Repositories.SubmitRepository;
 using SentientArchitect.Domain.Enums;
@@ -46,6 +47,17 @@ public class RepositoryEndpoints : IEndpointModule
             return result.ToHttpResult();
         })
         .WithName("GetRepositories")
+        .WithOpenApi();
+
+        group.MapGet("/{id:guid}/analysis", async (
+            [FromRoute] Guid id,
+            [FromServices] GetRepositoryAnalysisUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new GetRepositoryAnalysisRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("GetRepositoryAnalysis")
         .WithOpenApi();
 
         group.MapGet("/{id:guid}/reports", async (

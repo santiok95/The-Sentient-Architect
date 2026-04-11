@@ -85,7 +85,6 @@ function RepoCard({
 }
 
 export function GuardianView() {
-  const [activeKnowledgeItemId, setActiveKnowledgeItemId] = useState<string | null>(null)
   const [activeRepoId, setActiveRepoId] = useState<string | null>(null)
   const { data, isLoading } = useRepositories()
 
@@ -120,13 +119,10 @@ export function GuardianView() {
                   <RepoCard
                     key={repo.id}
                     repo={repo}
-                    isActive={activeKnowledgeItemId === repo.knowledgeItemId || activeRepoId === repo.id}
+                    isActive={activeRepoId === repo.id}
                     onClick={() => {
-                      setActiveRepoId(repo.id)
                       if (repo.processingStatus === 'Completed') {
-                        setActiveKnowledgeItemId(repo.knowledgeItemId)
-                      } else {
-                        setActiveKnowledgeItemId(null)
+                        setActiveRepoId(repo.id)
                       }
                     }}
                   />
@@ -138,12 +134,10 @@ export function GuardianView() {
       <div className="min-w-0 space-y-4">
         <AnalysisLiveLog
           repositoryId={activeRepoId}
-          onComplete={() => setActiveKnowledgeItemId(
-            repos.find((r) => r.id === activeRepoId)?.knowledgeItemId ?? null
-          )}
+          onComplete={() => {}}
         />
-        {activeKnowledgeItemId ? (
-          <AnalysisReport knowledgeItemId={activeKnowledgeItemId} />
+        {activeRepoId ? (
+          <AnalysisReport repositoryId={activeRepoId} />
         ) : (
           <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
             <div className="text-center">

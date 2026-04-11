@@ -1,9 +1,8 @@
-using SentientArchitect.Domain.Enums;
-
 namespace SentientArchitect.Application.Features.Repositories.GetAnalysisReport;
 
 public record FindingItem(
-    FindingSeverity Severity,
+    Guid Id,
+    string Severity,
     string Category,
     string Message,
     string? FilePath,
@@ -11,9 +10,9 @@ public record FindingItem(
 
 public record GetAnalysisReportResponse(
     Guid Id,
-    AnalysisStatus Status,
+    string Status,
     string? Summary,
     int TotalFindings,
     int CriticalFindings,
-    DateTime? CompletedAt,
+    string? CompletedAt,
     List<FindingItem> Findings);

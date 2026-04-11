@@ -1,12 +1,14 @@
-using SentientArchitect.Domain.Enums;
-
 namespace SentientArchitect.Application.Features.Repositories.GetRepositories;
 
 public record RepositoryItem(
     Guid Id,
-    string Url,
-    RepositoryTrust Trust,
-    DateTime? LastAnalyzedAt,
-    int ReportCount);
+    string GitUrl,
+    string TrustLevel,
+    string? PrimaryLanguage,
+    int? Stars,
+    string? LastCommitDate,
+    string ProcessingStatus,
+    string Scope,
+    string CreatedAt);
 
 public record GetRepositoriesResponse(List<RepositoryItem> Items, int TotalCount);

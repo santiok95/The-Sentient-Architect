@@ -82,22 +82,22 @@ function ScoreGauge({ label, score, icon }: { label: string; score: number; icon
 }
 
 interface Props {
-  knowledgeItemId: string
+  repositoryId: string
 }
 
-export function AnalysisReport({ knowledgeItemId }: Props) {
+export function AnalysisReport({ repositoryId }: Props) {
   const queryClient = useQueryClient()
-  const { data: analysis, isLoading: loadingAnalysis } = useRepositoryAnalysis(knowledgeItemId)
+  const { data: analysis, isLoading: loadingAnalysis } = useRepositoryAnalysis(repositoryId)
   const latestReport = analysis?.reports[0]
   const { data: findingsData, isLoading: loadingFindings } = useFindings(
-    knowledgeItemId,
+    repositoryId,
     latestReport?.id ?? null,
   )
 
   const { execute: reanalyze, isPending: isReanalyzing } = useAction(reanalyzeAction, {
     onSuccess: () => {
       toast.success('Re-análisis solicitado')
-      queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.analysis(knowledgeItemId) })
+      queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.analysis(repositoryId) })
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'Error al re-analizar'),
   })
@@ -133,13 +133,16 @@ export function AnalysisReport({ knowledgeItemId }: Props) {
           <p className="font-mono text-sm text-foreground/90">{repositoryInfo.gitUrl}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {repositoryInfo.primaryLanguage} · Analizado{' '}
-            {new Date(latestReport.executedAt).toLocaleDateString('es-AR')} · {latestReport.analysisDurationSeconds}s
+            {latestReport.executedAt
+              ? new Date(latestReport.executedAt).toLocaleDateString('es-AR')
+              : '—'}{' '}
+            · {latestReport.analysisDurationSeconds}s
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => reanalyze({ knowledgeItemId })}
+          onClick={() => reanalyze({ repositoryId })}
           disabled={isReanalyzing}
         >
           {isReanalyzing ? (

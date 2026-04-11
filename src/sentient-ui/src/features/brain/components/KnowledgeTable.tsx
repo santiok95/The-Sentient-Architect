@@ -183,13 +183,13 @@ export function KnowledgeTable({ searchTerm = '', typeFilter = '' }: Props) {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap max-w-[160px]">
-                        {item.tags.slice(0, 3).map((tag) => (
+                        {(item.tags ?? []).slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="outline" className="text-xs px-1.5 py-0 h-5">
                             {tag}
                           </Badge>
                         ))}
-                        {item.tags.length > 3 && (
-                          <span className="text-xs text-muted-foreground">+{item.tags.length - 3}</span>
+                        {(item.tags?.length ?? 0) > 3 && (
+                          <span className="text-xs text-muted-foreground">+{item.tags!.length - 3}</span>
                         )}
                       </div>
                     </TableCell>

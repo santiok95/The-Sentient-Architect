@@ -255,7 +255,7 @@ export function TrendsTable() {
 
       {!isLoading && (
         <p className="text-xs text-muted-foreground font-mono">
-          Actualizado: {data?.items[0]
+          Actualizado: {data?.items?.[0]
             ? new Date(data.items[0].lastUpdatedAt).toLocaleString('es-AR')
             : '—'}
         </p>
