@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { login } from '@/lib/auth'
+import { useUiStore } from '@/store/ui-store'
 import { Loader2 } from 'lucide-react'
 
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from') ?? '/'
+  const setUser = useUiStore((s) => s.setUser)
 
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
@@ -33,6 +35,7 @@ export function LoginForm() {
       return
     }
 
+    setUser(result.session.user)
     router.push(from)
     router.refresh()
   }

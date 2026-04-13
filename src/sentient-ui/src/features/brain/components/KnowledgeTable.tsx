@@ -26,6 +26,7 @@ import { MoreHorizontal, Trash2, Globe, Loader2, ExternalLink } from 'lucide-rea
 import { useKnowledgeItems, type KnowledgeItem, useInvalidateKnowledge } from '../hooks/useKnowledge'
 import { deleteKnowledgeAction } from '../actions'
 import { PublishDialog } from './PublishDialog'
+import { useUiStore, selectUser } from '@/store/ui-store'
 
 const TYPE_COLORS: Record<string, string> = {
   Article: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -49,6 +50,8 @@ interface Props {
 function KnowledgeRowActions({ item }: { item: KnowledgeItem }) {
   const [publishOpen, setPublishOpen] = useState(false)
   const invalidate = useInvalidateKnowledge()
+  const user = useUiStore(selectUser)
+  const isAdmin = user?.role === 'Admin'
 
   const { execute: executeDelete, isPending: isDeleting } = useAction(deleteKnowledgeAction, {
     onSuccess: () => {
@@ -79,10 +82,10 @@ function KnowledgeRowActions({ item }: { item: KnowledgeItem }) {
               Ver fuente
             </DropdownMenuItem>
           )}
-          {item.scope === 'Personal' && item.processingStatus === 'Completed' && (
+          {isAdmin && item.scope === 'Personal' && item.processingStatus === 'Completed' && (
             <DropdownMenuItem onClick={() => setPublishOpen(true)}>
               <Globe className="mr-2 h-3.5 w-3.5" />
-              Solicitar publicación
+              Publicar directamente
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />

@@ -5,4 +5,5 @@ namespace SentientArchitect.Application.Features.Knowledge.RequestPublishKnowled
 public record RequestPublishKnowledgeRequest(
     Guid UserId,
     Guid KnowledgeItemId,
+    bool RequesterIsAdmin = false,
     string? Reason = null);

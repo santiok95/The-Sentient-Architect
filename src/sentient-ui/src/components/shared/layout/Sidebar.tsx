@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   LayoutGrid,
@@ -12,11 +12,20 @@ import {
   Users,
   Rss,
   Settings,
-  MoreHorizontal,
+  LogOut,
+  ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUiStore, selectSidebarOpen, selectUser } from '@/store/ui-store'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { logout } from '@/lib/auth'
 
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
@@ -78,9 +87,57 @@ function NavBadge({ children, variant }: { children: React.ReactNode; variant: N
   )
 }
 
-function SidebarContent({ pathname }: { pathname: string }) {
+function UserMenu() {
   const user = useUiStore(selectUser)
+  const setUser = useUiStore((s) => s.setUser)
+  const router = useRouter()
+  const [isPending, setIsPending] = useState(false)
 
+  async function handleLogout() {
+    setIsPending(true)
+    await logout()
+    setUser(null)
+    router.replace('/login')
+  }
+
+  const initials = user?.displayName?.slice(0, 2).toUpperCase() ?? 'SA'
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="w-full flex items-center gap-2.5 px-1.5 py-2 rounded-md hover:bg-input transition-colors group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+        <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="text-[13px] font-medium text-foreground truncate">
+            {user?.displayName ?? '—'}
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate">
+            {user?.role ?? '—'}
+          </div>
+        </div>
+        <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-56 font-mono">
+        <div className="px-2 py-1.5">
+          <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? ''}</p>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={handleLogout}
+          disabled={isPending}
+          variant="destructive"
+          className="gap-2 cursor-pointer"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          {isPending ? 'Cerrando sesión…' : 'Cerrar sesión'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function SidebarContent({ pathname }: { pathname: string }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -133,22 +190,9 @@ function SidebarContent({ pathname }: { pathname: string }) {
         ))}
       </nav>
 
-      {/* Footer */}
+      {/* Footer — user menu */}
       <div className="border-t border-border p-3 flex-shrink-0">
-        <div className="flex items-center gap-2.5 px-1.5 py-2 rounded-md hover:bg-input cursor-pointer transition-colors group">
-          <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0">
-            {user?.displayName?.slice(0, 2).toUpperCase() ?? 'SA'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-foreground truncate">
-              {user?.displayName ?? 'Santiago'}
-            </div>
-            <div className="text-[11px] text-muted-foreground truncate">
-              {user?.role ?? 'Admin'}
-            </div>
-          </div>
-          <MoreHorizontal className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-        </div>
+        <UserMenu />
       </div>
     </div>
   )

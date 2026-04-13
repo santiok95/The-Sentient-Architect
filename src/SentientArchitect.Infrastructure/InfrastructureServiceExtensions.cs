@@ -80,6 +80,7 @@ public static class InfrastructureServiceExtensions
         // ── Identity services ────────────────────────────────────────────────
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IUserAccessor, UserAccessor>();
+        services.AddScoped<IUserService, UserService>();
         services.AddScoped<IdentitySeeder>();
 
         // ── AI — Chat (configurable: "OpenAI" | "Anthropic") ────────────────

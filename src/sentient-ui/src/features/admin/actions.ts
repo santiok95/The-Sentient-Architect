@@ -26,5 +26,5 @@ export const reviewPublishRequestAction = authedActionClient
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail ?? `Error al ${parsedInput.action === 'Approve' ? 'aprobar' : 'rechazar'} la solicitud`)
     }
-    return res.json() as Promise<{ id: string; status: string; reviewedAt: string }>
+    return { id: parsedInput.id, action: parsedInput.action }
   })

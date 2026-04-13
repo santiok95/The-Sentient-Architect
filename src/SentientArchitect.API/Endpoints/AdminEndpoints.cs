@@ -15,17 +15,23 @@ public class AdminEndpoints : IEndpointModule
             .WithTags("Admin")
             .RequireAuthorization("Admin");
 
+        // GET /api/v1/admin/publish-requests?status=Pending&page=1&pageSize=50
         group.MapGet("/publish-requests", async (
+            [FromQuery] string? status,
+            [FromQuery] int page,
+            [FromQuery] int pageSize,
             [FromServices] GetPendingPublishRequestsUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(ct);
+            var query = new GetPublishRequestsQuery(status, page < 1 ? 1 : page, pageSize < 1 ? 50 : pageSize);
+            var result = await useCase.ExecuteAsync(query, ct);
             return result.ToHttpResult();
         })
-        .WithName("GetPendingPublishRequests")
+        .WithName("GetPublishRequests")
         .WithOpenApi();
 
-        group.MapPost("/publish-requests/{id:guid}/review", async (
+        // PATCH /api/v1/admin/publish-requests/{id}
+        group.MapPatch("/publish-requests/{id:guid}", async (
             [FromRoute] Guid id,
             [FromBody] ReviewPublishRequestHttpRequest body,
             [FromServices] IUserAccessor userAccessor,
@@ -33,19 +39,18 @@ public class AdminEndpoints : IEndpointModule
             CancellationToken ct) =>
         {
             var reviewerUserId = userAccessor.GetCurrentUserId();
-
-            var request = new ReviewPublishRequestRequest(id, reviewerUserId, body.Approved, body.RejectionReason);
-            var result  = await useCase.ExecuteAsync(request, ct);
+            var request = new ReviewPublishRequestRequest(id, reviewerUserId, body.Action, body.RejectionReason);
+            var result = await useCase.ExecuteAsync(request, ct);
             return result.ToHttpResult();
         })
         .WithName("ReviewPublishRequest")
         .WithOpenApi();
 
+        // POST /api/v1/admin/trends/sync
         group.MapPost("/trends/sync", async (
             [FromServices] ITrendScanner scanner,
             CancellationToken ct) =>
         {
-            // Fire-and-forget — don't block the HTTP response
             _ = Task.Run(() => scanner.ScanAsync(CancellationToken.None));
             return Results.Accepted("/api/v1/admin/trends/sync", new
             {
@@ -57,5 +62,5 @@ public class AdminEndpoints : IEndpointModule
         .WithOpenApi();
     }
 
-    private record ReviewPublishRequestHttpRequest(bool Approved, string? RejectionReason = null);
+    private record ReviewPublishRequestHttpRequest(string Action, string? RejectionReason = null);
 }

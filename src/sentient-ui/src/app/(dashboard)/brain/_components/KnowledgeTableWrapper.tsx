@@ -16,7 +16,7 @@ import { IngestDialog } from '@/features/brain/components/IngestDialog'
 import { IngestProgress } from '@/features/brain/components/IngestProgress'
 
 const TYPE_OPTIONS = [
-  { label: 'Todos los tipos', value: '' },
+  { label: 'Todos los tipos', value: 'all' },
   { label: 'Artículo', value: 'Article' },
   { label: 'Nota', value: 'Note' },
   { label: 'Documentación', value: 'Documentation' },
@@ -25,17 +25,20 @@ const TYPE_OPTIONS = [
 
 export function KnowledgeTableWrapper() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  const [typeSelect, setTypeSelect] = useState('all')
   const [ingestOpen, setIngestOpen] = useState(false)
+
+  // 'all' sentinel maps to empty string (no filter sent to the API)
+  const typeFilter = typeSelect === 'all' ? '' : typeSelect
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchBar />
+        <SearchBar onSearch={setSearchTerm} />
         <div className="flex items-center gap-2 shrink-0">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? '')}>
+          <Select value={typeSelect} onValueChange={(v) => setTypeSelect(v ?? 'all')}>
             <SelectTrigger className="w-44 h-9">
               <SelectValue placeholder="Filtrar por tipo" />
             </SelectTrigger>

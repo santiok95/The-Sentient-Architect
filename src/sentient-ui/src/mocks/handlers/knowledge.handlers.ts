@@ -1,8 +1,20 @@
 import { http, HttpResponse } from 'msw'
+import { MOCK_REQUESTS } from './admin.handlers'
+import type { PublishRequest } from '@/lib/api.types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
 
-const MOCK_ITEMS = [
+let MOCK_ITEMS: {
+  id: string
+  title: string
+  type: 'Article' | 'Note' | 'Documentation' | 'Repository'
+  summary: string
+  sourceUrl: string | null
+  tags: string[]
+  processingStatus: 'Pending' | 'Processing' | 'Completed' | 'Failed'
+  scope: 'Personal' | 'Shared'
+  createdAt: string
+}[] = [
   {
     id: 'ki-001',
     title: 'CQRS + Event Sourcing in .NET 9',
@@ -83,15 +95,47 @@ export const knowledgeHandlers = [
 
   http.post(`${BASE_URL}/api/v1/knowledge`, async ({ request }) => {
     const body = await request.json() as Record<string, unknown>
+    const isAdmin = request.headers.get('authorization')?.toLowerCase().includes('admin') ?? false
+    const newId = `ki-${Date.now()}`
+    const title = (body.title as string) ?? 'Nuevo artículo'
+    const type = (body.type as string) ?? 'Article'
+
+    // Add to local mock items so GET reflects the new item
+    MOCK_ITEMS.push({
+      id: newId,
+      title,
+      type: type as typeof MOCK_ITEMS[0]['type'],
+      summary: ((body.content as string) ?? '').slice(0, 120) || title,
+      sourceUrl: (body.sourceUrl as string | null) ?? null,
+      tags: (body.tags as string[]) ?? [],
+      processingStatus: 'Completed',
+      scope: 'Personal',
+      createdAt: new Date().toISOString(),
+    })
+
+    // Non-admin users get an automatic publish request
+    if (!isAdmin) {
+      const pr: PublishRequest = {
+        id: `pr-${Date.now()}`,
+        knowledgeItem: { id: newId, title, type, summary: '' },
+        requestedBy: { id: 'user-current', displayName: 'Vos', role: 'User' },
+        requestReason: undefined,
+        status: 'Pending',
+        createdAt: new Date().toISOString(),
+      }
+      MOCK_REQUESTS.push(pr)
+    }
+
     return HttpResponse.json(
       {
-        id: `ki-${Date.now()}`,
-        processingStatus: 'Pending',
-        message: 'Content queued for processing',
-        ...body,
+        id: newId,
+        title,
+        type,
+        status: 'Completed',
+        chunksCreated: 1,
         createdAt: new Date().toISOString(),
       },
-      { status: 202 },
+      { status: 201 },
     )
   }),
 
@@ -122,11 +166,38 @@ export const knowledgeHandlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
-  http.post(`${BASE_URL}/api/v1/knowledge/:id/publish`, () => {
+  http.post(`${BASE_URL}/api/v1/knowledge/:id/publish`, ({ request }) => {
+    const isAdmin = request.headers.get('authorization')?.includes('admin') ?? false
+    const status = isAdmin ? 'Approved' : 'Pending'
     return HttpResponse.json(
-      { publishRequestId: `pr-${Date.now()}`, status: 'Pending' },
+      { publishRequestId: `pr-${Date.now()}`, status },
       { status: 202 },
     )
+  }),
+
+  http.get(`${BASE_URL}/api/v1/knowledge/my-publish-requests`, ({ request }) => {
+    const url = new URL(request.url)
+    const page = parseInt(url.searchParams.get('page') ?? '1', 10)
+    const pageSize = parseInt(url.searchParams.get('pageSize') ?? '20', 10)
+
+    // Return the subset of MOCK_REQUESTS that belong to the "current user" (user-current or user-001)
+    const mine = MOCK_REQUESTS.filter((r) =>
+      r.requestedBy.id === 'user-current' || r.requestedBy.id === 'user-001',
+    )
+    const start = (page - 1) * pageSize
+    const items = mine.slice(start, start + pageSize).map((r) => ({
+      id: r.id,
+      knowledgeItemId: r.knowledgeItem.id,
+      knowledgeItemTitle: r.knowledgeItem.title,
+      knowledgeItemType: r.knowledgeItem.type,
+      requestReason: r.requestReason,
+      status: r.status,
+      createdAt: r.createdAt,
+      reviewedAt: r.reviewedAt,
+      rejectionReason: undefined,
+    }))
+
+    return HttpResponse.json({ items, totalCount: mine.length, page, pageSize })
   }),
 
   http.get(`${BASE_URL}/api/v1/tags`, () => {

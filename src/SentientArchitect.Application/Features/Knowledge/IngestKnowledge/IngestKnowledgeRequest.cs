@@ -9,5 +9,6 @@ public record IngestKnowledgeRequest(
     string OriginalContent,
     KnowledgeItemType Type,
     string? SourceUrl = null,
-    List<string>? Tags = null
+    List<string>? Tags = null,
+    bool IsUserAdmin = false
 );

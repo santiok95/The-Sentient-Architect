@@ -3,7 +3,7 @@ import type { PublishRequest } from '@/lib/api.types'
 
 const BASE = 'http://localhost:5000/api/v1'
 
-let MOCK_REQUESTS: PublishRequest[] = [
+export let MOCK_REQUESTS: PublishRequest[] = [
   {
     id: 'pr-001',
     knowledgeItem: {

@@ -34,6 +34,13 @@ public class RequestPublishKnowledgeUseCase(IApplicationDbContext db)
             request.UserId,
             request.Reason);
 
+        // Admin requests are auto-approved immediately
+        if (request.RequesterIsAdmin)
+        {
+            publishRequest.Approve(request.UserId);
+            knowledgeItem.PublishToShared(Guid.Empty);
+        }
+
         db.ContentPublishRequests.Add(publishRequest);
         await db.SaveChangesAsync(ct);
 

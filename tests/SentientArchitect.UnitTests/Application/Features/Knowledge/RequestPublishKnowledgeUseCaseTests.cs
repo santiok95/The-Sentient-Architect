@@ -26,7 +26,7 @@ public class RequestPublishKnowledgeUseCaseTests : TestBase
         DbContext.KnowledgeItems.Add(item);
         await DbContext.SaveChangesAsync();
 
-        var request = new RequestPublishKnowledgeRequest(userId, item.Id, "Reason");
+        var request = new RequestPublishKnowledgeRequest(userId, item.Id, false, "Reason");
 
         // Act
         var result = await _sut.ExecuteAsync(request);
@@ -38,6 +38,30 @@ public class RequestPublishKnowledgeUseCaseTests : TestBase
         publishRequest!.KnowledgeItemId.Should().Be(item.Id);
         publishRequest.RequestReason.Should().Be("Reason");
         publishRequest.Status.Should().Be(PublishRequestStatus.Pending);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldAutoApproveAndPublish_WhenRequesterIsAdmin()
+    {
+        // Arrange
+        var adminId = Guid.NewGuid();
+        var item = new KnowledgeItem(adminId, Guid.NewGuid(), "Admin Item", "Content", KnowledgeItemType.Article);
+        DbContext.KnowledgeItems.Add(item);
+        await DbContext.SaveChangesAsync();
+
+        var request = new RequestPublishKnowledgeRequest(adminId, item.Id, true, "Admin publish");
+
+        // Act
+        var result = await _sut.ExecuteAsync(request);
+
+        // Assert
+        result.Succeeded.Should().BeTrue();
+        var publishRequest = await DbContext.ContentPublishRequests.FirstOrDefaultAsync();
+        publishRequest.Should().NotBeNull();
+        publishRequest!.Status.Should().Be(PublishRequestStatus.Approved);
+
+        var savedItem = await DbContext.KnowledgeItems.FindAsync(item.Id);
+        savedItem!.TenantId.Should().Be(Guid.Empty);
     }
 
     [Fact]

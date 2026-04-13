@@ -1,10 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Application.Features.Knowledge.GetKnowledgeItems;
 
-public record GetKnowledgeItemsRequest(Guid UserId);
+public record GetKnowledgeItemsRequest(
+    Guid UserId,
+    int Page = 1,
+    int PageSize = 20,
+    string? Search = null,
+    string? Type = null);
 
 public record KnowledgeItemDto(
     Guid Id,
@@ -19,23 +25,53 @@ public record KnowledgeItemDto(
     DateTime UpdatedAt
 );
 
+public record PagedKnowledgeItemsDto(
+    List<KnowledgeItemDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize
+);
+
 public class GetKnowledgeItemsUseCase(IApplicationDbContext db)
 {
-    public async Task<Result<List<KnowledgeItemDto>>> ExecuteAsync(GetKnowledgeItemsRequest request, CancellationToken ct = default)
+    public async Task<Result<PagedKnowledgeItemsDto>> ExecuteAsync(GetKnowledgeItemsRequest request, CancellationToken ct = default)
     {
-        var items = await db.KnowledgeItems
-            .Where(k => k.UserId == request.UserId)
+        var query = db.KnowledgeItems
+            .Where(k => k.UserId == request.UserId || k.TenantId == Guid.Empty)
             .Include(k => k.KnowledgeItemTags)
                 .ThenInclude(t => t.Tag)
             .Include(k => k.Embeddings)
-            .AsNoTracking()
+            .AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+            query = query.Where(k => k.Title.ToLower().Contains(request.Search.ToLower()));
+
+        if (!string.IsNullOrWhiteSpace(request.Type))
+        {
+            var rawType = request.Type.Equals("Repository", StringComparison.OrdinalIgnoreCase)
+                ? nameof(KnowledgeItemType.RepositoryReference)
+                : request.Type;
+
+            if (Enum.TryParse<KnowledgeItemType>(rawType, ignoreCase: true, out var enumType))
+                query = query.Where(k => k.Type == enumType);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+
+        var items = await query
+            .OrderByDescending(k => k.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(ct);
 
         var dtos = items.Select(k => new KnowledgeItemDto(
             Id: k.Id,
             Title: k.Title,
             Type: k.Type.ToString(),
-            Scope: k.UserId == k.TenantId ? "Personal" : "Shared",
+            Scope: k.TenantId == Guid.Empty ? "Shared" : "Personal",
             ProcessingStatus: k.ProcessingStatus.ToString(),
             HasEmbeddings: k.Embeddings.Any(),
             SourceUrl: k.SourceUrl,
@@ -44,6 +80,7 @@ public class GetKnowledgeItemsUseCase(IApplicationDbContext db)
             UpdatedAt: k.UpdatedAt
         )).ToList();
 
-        return Result<List<KnowledgeItemDto>>.SuccessWith(dtos);
+        return Result<PagedKnowledgeItemsDto>.SuccessWith(
+            new PagedKnowledgeItemsDto(dtos, totalCount, page, pageSize));
     }
 }

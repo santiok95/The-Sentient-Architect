@@ -90,7 +90,18 @@ public class IngestKnowledgeUseCase(
             // 9. Persist final state
             await db.SaveChangesAsync(ct);
 
-            // 10. Return success
+            // 10. Auto-create publish request for non-admin users
+            if (!request.IsUserAdmin)
+            {
+                var publishRequest = new ContentPublishRequest(
+                    item.Id,
+                    request.UserId,
+                    requestReason: null);
+                db.ContentPublishRequests.Add(publishRequest);
+                await db.SaveChangesAsync(ct);
+            }
+
+            // 11. Return success
             return Result<IngestKnowledgeResponse>.SuccessWith(
                 new IngestKnowledgeResponse(item.Id, item.ProcessingStatus, chunks.Count));
         }

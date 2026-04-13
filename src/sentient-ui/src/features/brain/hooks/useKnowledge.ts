@@ -56,10 +56,9 @@ export function useKnowledgeItems(
         ...(search && { search }),
         ...(type && { type }),
       })
-      const res = await apiClient.get<KnowledgeItem[]>(`/api/v1/knowledge?${params.toString()}`)
+      const res = await apiClient.get<KnowledgeListResponse>(`/api/v1/knowledge?${params.toString()}`)
       if (!res.ok) throw new Error(res.error ?? 'Error fetching knowledge')
-      const items = res.data ?? []
-      return { items, totalCount: items.length, page, pageSize } as KnowledgeListResponse
+      return res.data ?? { items: [], totalCount: 0, page, pageSize }
     },
     placeholderData: (prev) => prev,
   })

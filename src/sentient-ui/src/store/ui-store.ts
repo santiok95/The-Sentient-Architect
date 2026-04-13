@@ -49,6 +49,9 @@ interface UiState {
   // Auth (persisted)
   user: AuthUser | null
 
+  // Hydration flag — true once Zustand has rehydrated from localStorage
+  _hasHydrated: boolean
+
   // SignalR status (UI indicators only — no connection objects)
   hubStatus: Record<string, HubStatus>
 
@@ -71,6 +74,9 @@ interface UiActions {
 
   // Auth
   setUser: (user: AuthUser | null) => void
+
+  // Hydration
+  setHasHydrated: (v: boolean) => void
 
   // Hub status
   setHubStatus: (hubName: string, status: HubStatus) => void
@@ -108,6 +114,10 @@ export const useUiStore = create<UiState & UiActions>()(
       // ── Auth ─────────────────────────────────────────────────────────────────
       user: null,
       setUser: (user) => set({ user }),
+
+      // ── Hydration ────────────────────────────────────────────────────────────
+      _hasHydrated: false,
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
 
       // ── Hub Status ───────────────────────────────────────────────────────────
       hubStatus: {},
@@ -152,6 +162,9 @@ export const useUiStore = create<UiState & UiActions>()(
         user: state.user,
         offlineQueue: state.offlineQueue,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
     },
   ),
 )
@@ -162,5 +175,6 @@ export const selectSidebarOpen = (s: UiState) => s.sidebarOpen
 export const selectConsultantPanelOpen = (s: UiState) => s.consultantPanelOpen
 export const selectActiveTheme = (s: UiState) => s.activeTheme
 export const selectUser = (s: UiState) => s.user
+export const selectHasHydrated = (s: UiState) => s._hasHydrated
 export const selectHubStatus = (s: UiState) => s.hubStatus
 export const selectOfflineQueue = (s: UiState) => s.offlineQueue

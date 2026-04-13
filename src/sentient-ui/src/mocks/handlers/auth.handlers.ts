@@ -3,16 +3,18 @@ import { http, HttpResponse } from 'msw'
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
 
 export const authHandlers = [
-  http.post(`${BASE_URL}/api/v1/auth/login`, () => {
+  http.post(`${BASE_URL}/api/v1/auth/login`, async ({ request }) => {
+    const body = await request.json() as { email?: string }
+    const isAdmin = body?.email?.includes('admin') ?? false
     return HttpResponse.json({
-      token: 'mock-jwt-token',
+      token: isAdmin ? 'mock-jwt-admin-token' : 'mock-jwt-token',
       refreshToken: 'mock-refresh-token',
       expiresIn: 3600,
       user: {
-        id: 'mock-user-id',
-        email: 'dev@sentient.io',
-        displayName: 'Dev User',
-        role: 'User',
+        id: isAdmin ? 'mock-admin-id' : 'mock-user-id',
+        email: body?.email ?? 'dev@sentient.io',
+        displayName: isAdmin ? 'Admin User' : 'Dev User',
+        role: isAdmin ? 'Admin' : 'User',
         tenantId: 'mock-tenant-id',
       },
     })

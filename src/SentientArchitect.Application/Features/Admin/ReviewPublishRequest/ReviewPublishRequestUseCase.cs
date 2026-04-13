@@ -11,19 +11,25 @@ public class ReviewPublishRequestUseCase(IApplicationDbContext db)
         CancellationToken ct = default)
     {
         var publishRequest = await db.ContentPublishRequests
+            .Include(r => r.KnowledgeItem)
             .FirstOrDefaultAsync(r => r.Id == request.RequestId, ct);
 
         if (publishRequest is null)
             return Result.Failure(["Publish request not found."]);
 
-        if (request.Approved)
+        if (request.Action.Equals("Approve", StringComparison.OrdinalIgnoreCase))
         {
             publishRequest.Approve(request.ReviewerUserId);
+            publishRequest.KnowledgeItem!.PublishToShared(Guid.Empty);
         }
-        else
+        else if (request.Action.Equals("Reject", StringComparison.OrdinalIgnoreCase))
         {
             var reason = request.RejectionReason ?? "No reason provided.";
             publishRequest.Reject(request.ReviewerUserId, reason);
+        }
+        else
+        {
+            return Result.Failure([$"Unknown action '{request.Action}'. Use 'Approve' or 'Reject'."]);
         }
 
         await db.SaveChangesAsync(ct);

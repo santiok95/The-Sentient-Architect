@@ -97,15 +97,17 @@ Request:
   "title": "string",
   "content": "string",          // raw text or markdown
   "sourceUrl": "string?",       // nullable
-  "type": "Article | Note | Documentation",
+  "type": "Article | Note | Documentation | Repository",
   "tags": ["string"]?           // optional manual tags
 }
 
-Response 202 Accepted:
+Response 201 Created:
 {
   "id": "guid",
-  "processingStatus": "Pending",
-  "message": "Content queued for processing"
+  "title": "string",
+  "type": "Article | Note | Documentation | Repository",
+  "status": "Pending | Processing | Completed | Failed",
+  "chunksCreated": 3
 }
 
 Errors: 400 Bad Request (validation), 429 Too Many Requests (rate limit)
@@ -153,7 +155,7 @@ Response 200:
   "tags": ["string"],
   "processingStatus": "string",
   "scope": "Personal | Shared",
-  "repositoryInfo": { ... }?,       // if type == RepositoryReference
+  "repositoryInfo": { ... }?,       // if type == Repository
   "latestAnalysisReport": { ... }?, // if repo has been analyzed
   "createdAt": "datetime",
   "updatedAt": "datetime"
@@ -170,7 +172,7 @@ Request:
 {
   "query": "string",            // natural language question
   "maxResults": 10,             // default 5
-  "types": ["Article", "RepositoryReference"]?,  // optional type filter
+  "types": ["Article", "Repository"]?,  // optional type filter
   "tags": ["string"]?,          // optional tag filter
   "includeShared": true         // default true
 }

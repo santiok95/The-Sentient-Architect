@@ -14,7 +14,7 @@ const TYPE_COLORS: Record<string, string> = {
   Repository: 'bg-amber-500/20 text-amber-400',
 }
 
-export function SearchBar() {
+export function SearchBar({ onSearch }: { onSearch?: (term: string) => void }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -22,6 +22,7 @@ export function SearchBar() {
 
   useEffect(() => {
     const handler = setTimeout(() => {
+      onSearch?.(query.trim())
       if (query.trim().length >= 3) {
         mutate({ query: query.trim(), maxResults: 8, includeShared: true })
         setOpen(true)
@@ -31,7 +32,7 @@ export function SearchBar() {
       }
     }, 400)
     return () => clearTimeout(handler)
-  }, [query, mutate, reset])
+  }, [query, mutate, reset, onSearch])
 
   // Close on outside click
   useEffect(() => {
@@ -48,6 +49,7 @@ export function SearchBar() {
     setQuery('')
     reset()
     setOpen(false)
+    onSearch?.('')
   }
 
   return (
