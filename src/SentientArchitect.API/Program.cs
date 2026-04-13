@@ -75,6 +75,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // SignalR hubs
+// TODO: un hub para todos llamado SentientHub o algo 
 app.MapHub<ConversationHub>("/hubs/conversation");
 app.MapHub<IngestionHub>("/hubs/ingestion");
 app.MapHub<AnalysisHub>("/hubs/analysis");

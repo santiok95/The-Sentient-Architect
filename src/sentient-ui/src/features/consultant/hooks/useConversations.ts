@@ -7,9 +7,10 @@ import { apiClient } from '@/lib/api-client'
 
 export interface ConversationSummary {
   id: string
-  objective: string
+  title: string
+  agentType: 'Knowledge' | 'Consultant'
   mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
-  status: 'Active' | 'Archived' | 'Completed'
+  status: 'Active' | 'Archived' | 'Compacted'
   messageCount: number
   lastMessageAt?: string
   createdAt: string

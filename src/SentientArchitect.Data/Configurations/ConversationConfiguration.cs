@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SentientArchitect.Domain.Entities;
+using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Data.Configurations;
 
@@ -14,6 +15,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.UserId).IsRequired();
         builder.Property(c => c.TenantId).IsRequired();
         builder.Property(c => c.Title).IsRequired().HasMaxLength(500);
+        builder.Property(c => c.AgentType).IsRequired().HasConversion<string>().HasMaxLength(50).HasDefaultValue(AgentType.Knowledge);
         builder.Property(c => c.Status).IsRequired().HasConversion<string>().HasMaxLength(50);
         builder.Property(c => c.ContextMode).IsRequired().HasConversion<string>().HasMaxLength(50);
         builder.Property(c => c.ActiveRepositoryId);
@@ -21,6 +23,8 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.TokenCount).IsRequired();
         builder.Property(c => c.CreatedAt).IsRequired();
         builder.Property(c => c.UpdatedAt).IsRequired();
+        builder.Property(c => c.DetectedStack).HasMaxLength(200);
+        builder.Property(c => c.DetectedScope).HasMaxLength(50);
 
         // FK to ApplicationUser (ADR-002: no navigation property in Domain)
         builder.HasOne<ApplicationUser>()

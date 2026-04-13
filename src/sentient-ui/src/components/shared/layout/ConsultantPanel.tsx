@@ -2,16 +2,43 @@
 
 import { useState } from 'react'
 import { X, MessageSquare } from 'lucide-react'
+import { useAction } from 'next-safe-action/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useUiStore, selectConsultantPanelOpen } from '@/store/ui-store'
 import { ChatPanel } from '@/features/consultant/components/ChatPanel'
 import { ConversationList } from '@/features/consultant/components/ConversationList'
+import { createConversationAction } from '@/features/consultant/actions'
+import { CONVERSATION_KEYS } from '@/features/consultant/hooks/useConversations'
+import type { AgentType } from '@/lib/schemas'
 
 export function ConsultantPanel() {
   const isOpen = useUiStore(selectConsultantPanelOpen)
   const setConsultantPanelOpen = useUiStore((s) => s.setConsultantPanelOpen)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [chatKey, setChatKey] = useState(0)
   const [view, setView] = useState<'chat' | 'list'>('chat')
+  const queryClient = useQueryClient()
+
+  function selectConversation(id: string | null) {
+    setActiveId(id)
+    setChatKey((k) => k + 1)
+    setView('chat')
+  }
+
+  const { execute: createConv, isPending: isCreating } = useAction(createConversationAction, {
+    onSuccess: ({ data: newConv }) => {
+      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.all })
+      selectConversation(newConv?.id ?? null)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'Error al crear conversación'),
+  })
+
+  function handleCreateConversation(agentType: AgentType) {
+    selectConversation(null)
+    createConv({ agentType })
+  }
 
   return (
     <aside
@@ -55,13 +82,18 @@ export function ConsultantPanel() {
         {view === 'list' ? (
           <ConversationList
             activeId={activeId}
-            onSelect={(id) => {
-              setActiveId(id)
-              setView('chat')
-            }}
+            onSelect={selectConversation}
+            onCreateConversation={handleCreateConversation}
+            isCreating={isCreating}
+            onDeselect={() => selectConversation(null)}
           />
         ) : (
-          <ChatPanel conversationId={activeId} />
+          <ChatPanel
+            key={chatKey}
+            conversationId={activeId}
+            onCreateConversation={handleCreateConversation}
+            isCreating={isCreating}
+          />
         )}
       </div>
     </aside>

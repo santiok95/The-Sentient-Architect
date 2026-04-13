@@ -19,14 +19,16 @@ export const createConversationAction = authedActionClient
       },
       body: JSON.stringify({
         title: parsedInput.title ?? 'Nueva consulta',
+        agentType: parsedInput.agentType ?? 'Knowledge',
       }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail ?? 'Error al crear la conversación')
     }
-    const data = await res.json() as { conversationId: string; title: string }
-    return { id: data.conversationId, objective: data.title, status: 'Active' }
+    const data = await res.json() as { conversationId?: string; id?: string; title: string }
+    const id = data.conversationId ?? data.id ?? ''
+    return { id, title: data.title, status: 'Active' }
   })
 
 // ─── Send Message ─────────────────────────────────────────────────────────────
@@ -34,14 +36,19 @@ export const createConversationAction = authedActionClient
 export const sendMessageAction = authedActionClient
   .schema(sendMessageSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const { conversationId, content, mode } = parsedInput
+    const { conversationId, content, contextMode, preferredStack, activeRepositoryId } = parsedInput
     const res = await fetch(`${BASE_URL}/api/v1/conversations/${conversationId}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${ctx.token}`,
       },
-      body: JSON.stringify({ message: content }),
+      body: JSON.stringify({
+        message: content,
+        ...(contextMode && { contextMode }),
+        ...(preferredStack && { preferredStack }),
+        ...(activeRepositoryId && { activeRepositoryId }),
+      }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -53,6 +60,7 @@ export const sendMessageAction = authedActionClient
 // ─── Archive Conversation ─────────────────────────────────────────────────────
 
 const archiveSchema = z.object({ id: z.string().uuid() })
+const deleteSchema = z.object({ id: z.string().uuid() })
 
 export const archiveConversationAction = authedActionClient
   .schema(archiveSchema)
@@ -66,4 +74,20 @@ export const archiveConversationAction = authedActionClient
       throw new Error(err.detail ?? 'Error al archivar la conversación')
     }
     return { archived: true }
+  })
+
+// ─── Delete Conversation ──────────────────────────────────────────────────────
+
+export const deleteConversationAction = authedActionClient
+  .schema(deleteSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const res = await fetch(`${BASE_URL}/api/v1/conversations/${parsedInput.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${ctx.token}` },
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail ?? 'Error al eliminar la conversación')
+    }
+    return { deleted: true }
   })

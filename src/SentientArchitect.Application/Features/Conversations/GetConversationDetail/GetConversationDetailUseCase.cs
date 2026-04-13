@@ -32,6 +32,7 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
         var response = new GetConversationDetailResponse(
             conversation.Id,
             conversation.Title,
+            conversation.AgentType.ToString(),
             conversation.ContextMode.ToString(),
             conversation.Status.ToString(),
             conversation.Messages.Count,

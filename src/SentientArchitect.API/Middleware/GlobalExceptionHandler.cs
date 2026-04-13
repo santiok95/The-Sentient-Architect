@@ -15,6 +15,9 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         logger.LogError(
             exception, "Exception occurred: {Message}", exception.Message);
 
+
+        //TODO usar la clase result para que siempre se devuelva la misma estructura del json
+
         var problemDetails = new ProblemDetails
         {
             Status = StatusCodes.Status500InternalServerError,

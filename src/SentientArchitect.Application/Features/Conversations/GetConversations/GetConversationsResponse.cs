@@ -4,7 +4,8 @@ namespace SentientArchitect.Application.Features.Conversations.GetConversations;
 
 public record ConversationSummary(
     Guid Id,
-    string Objective,
+    string Title,
+    string AgentType,
     string Mode,
     string Status,
     int MessageCount,

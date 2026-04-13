@@ -20,6 +20,7 @@ public class GetConversationsUseCase(IApplicationDbContext db)
             .Select(c => new ConversationSummary(
                 c.Id,
                 c.Title,
+                c.AgentType.ToString(),
                 c.ContextMode.ToString(),
                 c.Status.ToString(),
                 c.Messages.Count,

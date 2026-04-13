@@ -10,9 +10,14 @@ public record SaveMessageRequest(Guid ConversationId, Guid UserId, string Messag
 
 public class SaveMessageUseCase(IApplicationDbContext db)
 {
-    public async Task<Result<List<ConversationMessage>>> ExecuteAsync(SaveMessageRequest request, CancellationToken ct = default)
+    public async Task<Result<List<ConversationMessage>>> ExecuteAsync(
+        SaveMessageRequest request,
+        Conversation? existingConversation = null,
+        CancellationToken ct = default)
     {
-        var conversation = await db.Conversations
+        // Reuse the already-tracked conversation when provided to avoid double-load
+        // concurrency issues in the same DbContext scope. Caller must include Messages.
+        var conversation = existingConversation ?? await db.Conversations
             .Include(c => c.Messages)
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId, ct);
 
@@ -21,7 +26,8 @@ public class SaveMessageUseCase(IApplicationDbContext db)
 
         var message = new ConversationMessage(request.ConversationId, request.Role, request.Message);
         conversation.AddMessage(message);
-        
+        db.ConversationMessages.Add(message);
+
         await db.SaveChangesAsync(ct);
 
         var recentMessages = conversation.Messages

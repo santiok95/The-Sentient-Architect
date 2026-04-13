@@ -18,26 +18,28 @@ public class ExecuteChatUseCase(
         if (string.IsNullOrWhiteSpace(request.Message))
             return Result<ChatExecutionResponse>.Failure(["Message is required."], ErrorType.Validation);
 
+        var conversation = await db.Conversations
+            .Include(c => c.Messages)
+            .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == request.UserId, ct);
+
+        if (conversation is null)
+            return Result<ChatExecutionResponse>.Failure(["Conversation not found."], ErrorType.NotFound);
+
         if (request.ActiveRepositoryId.HasValue ||
             request.ContextMode.HasValue ||
             !string.IsNullOrWhiteSpace(request.PreferredStack))
         {
-            var conversation = await db.Conversations
-                .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == request.UserId, ct);
-
-            if (conversation is null)
-                return Result<ChatExecutionResponse>.Failure(["Conversation not found."], ErrorType.NotFound);
-
             conversation.UpdateConsultantContext(
                 request.ActiveRepositoryId,
                 request.PreferredStack,
                 request.ContextMode);
 
-            await db.SaveChangesAsync(ct);
+            // No separate SaveChangesAsync here — SaveMessageUseCase will persist everything in one shot
         }
 
         var saveUserMessageResult = await saveMessageUseCase.ExecuteAsync(
             new SaveMessageRequest(request.ConversationId, request.UserId, request.Message, MessageRole.User),
+            conversation,
             ct);
 
         if (!saveUserMessageResult.Succeeded || saveUserMessageResult.Data is null)
@@ -49,7 +51,7 @@ public class ExecuteChatUseCase(
             new ChatExecutionRequest(
                 request.ConversationId,
                 request.Message,
-                request.AgentType,
+                conversation.AgentType,
                 request.ActiveRepositoryId,
                 request.PreferredStack,
                 request.ContextMode),
@@ -66,6 +68,7 @@ public class ExecuteChatUseCase(
                 request.UserId,
                 executionResult.Data.AssistantMessage,
                 MessageRole.Assistant),
+            conversation,
             ct);
 
         if (!saveAssistantMessageResult.Succeeded)

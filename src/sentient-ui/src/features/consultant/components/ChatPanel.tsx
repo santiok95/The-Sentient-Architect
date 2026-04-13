@@ -4,12 +4,20 @@ import { useEffect, useRef, useState, useCallback, useOptimistic, useTransition 
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Send, Loader2, Bot, User, Sparkles, WifiOff } from 'lucide-react'
+import { Send, Loader2, Bot, User, Sparkles, WifiOff, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { Markdown } from '@/components/ui/markdown'
 import {
   useConversation,
   CONVERSATION_KEYS,
@@ -17,12 +25,27 @@ import {
 } from '../hooks/useConversations'
 import { sendMessageAction } from '../actions'
 import { useHub } from '@/hooks/useHub'
-import { getHubConnection } from '@/lib/signalr'
+import { getHubConnection, startHub } from '@/lib/signalr'
 import { useUiStore } from '@/store/ui-store'
 import { useOfflineQueue } from '@/hooks/useOfflineQueue'
+import type { AgentType, ContextMode } from '@/lib/schemas'
+
+const AGENT_LABELS: Record<AgentType, string> = {
+  Knowledge: 'Knowledge',
+  Consultant: 'Consultant',
+}
+
+const CONTEXT_MODE_LABELS: Record<ContextMode, string> = {
+  Auto: 'Auto',
+  RepoBound: 'Repo-Bound',
+  StackBound: 'Stack-Bound',
+  Generic: 'Generic',
+}
 
 interface Props {
   conversationId: string | null
+  onCreateConversation: (agentType: AgentType) => void
+  isCreating: boolean
 }
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
@@ -50,7 +73,11 @@ function MessageBubble({ message }: { message: ConversationMessage }) {
             : 'rounded-tl-sm border border-border bg-card',
         )}
       >
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        ) : (
+          <Markdown content={message.content} />
+        )}
         <p
           className={cn(
             'mt-1 text-xs',
@@ -84,8 +111,24 @@ function TypingIndicator() {
   )
 }
 
-export function ChatPanel({ conversationId }: Props) {
+export function ChatPanel({ conversationId, onCreateConversation, isCreating }: Props) {
   const [input, setInput] = useState('')
+  const [contextMode, setContextMode] = useState<ContextMode>('Auto')
+  const [pendingAgentType, setPendingAgentType] = useState<AgentType>('Knowledge')
+
+  const { data: conversation, isLoading } = useConversation(conversationId)
+  const serverMessages = conversation?.recentMessages ?? []
+
+  // agentType comes from the conversation — chosen at creation, immutable afterwards.
+  const agentType = (conversation?.agentType ?? 'Knowledge') as AgentType
+
+  // Sync contextMode with the persisted value on the conversation whenever it loads or changes.
+  useEffect(() => {
+    if (conversation?.mode) {
+      setContextMode(conversation.mode as ContextMode)
+    }
+  }, [conversation?.mode])
+
   // Streaming state — one in-flight AI message at a time
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
   // Buffer ref: accumulate chunks without triggering a re-render per token
@@ -101,9 +144,6 @@ export function ChatPanel({ conversationId }: Props) {
   const enqueueOfflineAction = useUiStore((s) => s.enqueueOfflineAction)
   const isOffline = hubState !== 'Connected'
 
-  const { data: conversation, isLoading } = useConversation(conversationId)
-  const serverMessages = conversation?.recentMessages ?? []
-
   // React 19 useOptimistic: shows user message instantly, stays until transition ends.
   // The transition is held open via streamCompleteRef until SignalR ReceiveComplete fires,
   // so the message is visible for the full HTTP + streaming cycle.
@@ -114,13 +154,33 @@ export function ChatPanel({ conversationId }: Props) {
   const [isPending, startTransition] = useTransition()
 
   // ── SignalR: join/leave hub group when conversation changes ───────────────
+  // Also re-join on reconnect — the group membership is lost when the connection drops.
   useEffect(() => {
     if (!conversationId) return
     const connection = getHubConnection('conversation')
-    connection.invoke('JoinConversation', conversationId).catch(() => {
-      // Hub may not be started yet — useHub below handles retry on reconnect
-    })
+    let active = true
+
+    async function joinGroup() {
+      if (!active) return
+      try {
+        // Wait for the connection to be ready if it's still starting up
+        if (connection.state !== 'Connected') {
+          await startHub('conversation')
+        }
+        if (active) {
+          await connection.invoke('JoinConversation', conversationId)
+        }
+      } catch {
+        // Will retry on next reconnect
+      }
+    }
+
+    joinGroup()
+    // Re-join automatically after reconnect (group membership is server-side, lost on drop)
+    connection.onreconnected(joinGroup)
+
     return () => {
+      active = false
       connection.invoke('LeaveConversation', conversationId).catch(() => {})
     }
   }, [conversationId])
@@ -132,17 +192,26 @@ export function ChatPanel({ conversationId }: Props) {
     streamBufferRef.current += token
   }, [])
 
-  const handleReceiveComplete = useCallback(() => {
-    // Flush remaining buffer and close stream
+  const handleReceiveComplete = useCallback(async () => {
+    // Stop the flush timer and do a final flush of any buffered content
     if (flushTimerRef.current) clearInterval(flushTimerRef.current)
     flushTimerRef.current = null
-    setStreamingContent(null)
-    streamBufferRef.current = ''
-    if (conversationId) {
-      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(conversationId) })
-      queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() })
+    if (streamBufferRef.current) {
+      setStreamingContent((prev) => (prev ?? '') + streamBufferRef.current)
+      streamBufferRef.current = ''
     }
-    // Release the transition: useOptimistic merges with the incoming server state
+
+    // Refetch the conversation so serverMessages is up to date BEFORE releasing the
+    // transition. This way useOptimistic hands off to real data, not an empty array.
+    if (conversationId) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.detail(conversationId) }),
+        queryClient.invalidateQueries({ queryKey: CONVERSATION_KEYS.list() }),
+      ])
+    }
+
+    setStreamingContent(null)
+    // Release the transition — useOptimistic now merges with fresh serverMessages
     streamCompleteRef.current?.()
     streamCompleteRef.current = null
   }, [conversationId, queryClient])
@@ -207,7 +276,7 @@ export function ChatPanel({ conversationId }: Props) {
     if (isOffline) {
       enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId, content: trimmed, mode: 'Auto' },
+        payload: { conversationId, content: trimmed, contextMode },
       })
       toast.info('Sin conexión — mensaje guardado en cola.', {
         icon: <WifiOff className="h-4 w-4" />,
@@ -232,7 +301,11 @@ export function ChatPanel({ conversationId }: Props) {
 
     startTransition(async () => {
       addOptimistic(optimistic)
-      const result = await executeAsync({ conversationId, content: trimmed, mode: 'Auto' })
+      const result = await executeAsync({
+        conversationId,
+        content: trimmed,
+        contextMode,
+      })
       if (result?.serverError) {
         toast.error(result.serverError, { style: { fontFamily: 'var(--font-fira-code)' } })
         streamCompleteRef.current?.()
@@ -253,16 +326,41 @@ export function ChatPanel({ conversationId }: Props) {
 
   if (!conversationId) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-6 text-center px-8">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10">
           <Sparkles className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <p className="font-medium">Architecture Consultant</p>
+          <p className="font-medium text-base">Nueva consulta</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Seleccioná una conversación o creá una nueva
+            Elegí el tipo de agente para esta conversación
           </p>
         </div>
+        <div className="flex gap-3">
+          {(Object.keys(AGENT_LABELS) as AgentType[]).map((a) => (
+            <button
+              key={a}
+              onClick={() => setPendingAgentType(a)}
+              className={cn(
+                'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm transition-colors',
+                pendingAgentType === a
+                  ? 'border-primary bg-primary/10 text-primary font-medium'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground',
+              )}
+            >
+              <Bot className="h-5 w-5" />
+              {AGENT_LABELS[a]}
+            </button>
+          ))}
+        </div>
+        <Button
+          onClick={() => onCreateConversation(pendingAgentType)}
+          disabled={isCreating}
+          className="gap-2"
+        >
+          {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          Empezar
+        </Button>
       </div>
     )
   }
@@ -273,9 +371,9 @@ export function ChatPanel({ conversationId }: Props) {
       {conversation && (
         <div className="flex items-center gap-2 border-b border-border px-4 py-3 shrink-0">
           <Bot className="h-4 w-4 text-primary" />
-          <p className="flex-1 truncate text-sm font-medium">{conversation.objective}</p>
+          <p className="flex-1 truncate text-sm font-medium">{conversation.title}</p>
           <Badge variant="outline" className="text-xs">
-            {conversation.mode}
+            {conversation.agentType}
           </Badge>
           {isOffline && (
             <Badge variant="destructive" className="gap-1 text-xs font-mono">
@@ -312,7 +410,10 @@ export function ChatPanel({ conversationId }: Props) {
               </div>
               <div className="max-w-[80%] rounded-xl rounded-tl-sm border border-primary/30 bg-card px-4 py-2.5 text-sm leading-relaxed">
                 {streamingContent ? (
-                  <p className="whitespace-pre-wrap">{streamingContent}<span className="ml-0.5 inline-block h-3.5 w-0.5 bg-primary animate-pulse" /></p>
+                  <div className="relative">
+                    <Markdown content={streamingContent} />
+                    <span className="ml-0.5 inline-block h-3.5 w-0.5 bg-primary animate-pulse align-middle" />
+                  </div>
                 ) : (
                   <TypingIndicator />
                 )}
@@ -326,6 +427,39 @@ export function ChatPanel({ conversationId }: Props) {
 
       {/* Input area */}
       <div className="border-t border-border p-4 shrink-0">
+        {/* Agent badge (read-only) + context mode selector */}
+        <div className="flex gap-2 mb-2">
+          <Badge variant="outline" className="h-7 gap-1 px-2 text-xs font-mono font-normal">
+            <Bot className="h-3 w-3" />
+            {AGENT_LABELS[agentType]}
+          </Badge>
+
+          {agentType === 'Consultant' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={isPending}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2 font-mono text-xs shadow-xs hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              >
+                {CONTEXT_MODE_LABELS[contextMode]}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Context Mode</div>
+                <DropdownMenuSeparator />
+                {(Object.keys(CONTEXT_MODE_LABELS) as ContextMode[]).map((m) => (
+                  <DropdownMenuItem
+                    key={m}
+                    className={cn('text-xs', contextMode === m && 'font-medium text-primary')}
+                    onClick={() => setContextMode(m)}
+                  >
+                    {CONTEXT_MODE_LABELS[m]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+
         <div className="flex gap-2 items-end">
           <Textarea
             ref={textareaRef}

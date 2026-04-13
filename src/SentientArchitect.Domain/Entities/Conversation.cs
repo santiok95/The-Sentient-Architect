@@ -5,11 +5,12 @@ namespace SentientArchitect.Domain.Entities;
 
 public class Conversation : BaseEntity
 {
-    public Conversation(Guid userId, Guid tenantId, string title = "New Conversation")
+    public Conversation(Guid userId, Guid tenantId, string title = "New Conversation", AgentType agentType = AgentType.Knowledge)
     {
         UserId = userId;
         TenantId = tenantId;
         Title = title;
+        AgentType = agentType;
         Status = ConversationStatus.Active;
         ContextMode = ConsultantContextMode.Auto;
         TokenCount = 0;
@@ -25,6 +26,7 @@ public class Conversation : BaseEntity
     public Guid UserId { get; private set; }
     public Guid TenantId { get; private set; }
     public string Title { get; private set; } = "New Conversation";
+    public AgentType AgentType { get; private set; }
     public ConversationStatus Status { get; private set; }
     public ConsultantContextMode ContextMode { get; private set; }
     public Guid? ActiveRepositoryId { get; private set; }
@@ -32,6 +34,10 @@ public class Conversation : BaseEntity
     public string? Summary { get; private set; }
     public int TokenCount { get; private set; }
     public DateTime UpdatedAt { get; private set; }
+
+    // Intent detected by LLM from the user's first message(s) in Auto mode
+    public string? DetectedStack { get; private set; }
+    public string? DetectedScope { get; private set; }  // "NewApp" | "ExistingRepo" | "Generic"
 
     public ICollection<ConversationMessage> Messages { get; private set; }
 
@@ -58,6 +64,15 @@ public class Conversation : BaseEntity
     public void UpdateTitle(string title)
     {
         Title = title;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateDetectedIntent(string? detectedStack, string? detectedScope)
+    {
+        if (!string.IsNullOrWhiteSpace(detectedStack))
+            DetectedStack = detectedStack.Trim();
+        if (!string.IsNullOrWhiteSpace(detectedScope))
+            DetectedScope = detectedScope.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 

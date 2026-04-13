@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -13,9 +14,11 @@ using SentientArchitect.Data;
 namespace SentientArchitect.Data.Postgres.Migrations
 {
     [DbContext(typeof(ApplicationContext))]
-    partial class ApplicationContextModelSnapshot : ModelSnapshot
+    [Migration("20260412232730_AddConversationAgentType")]
+    partial class AddConversationAgentType
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -370,10 +373,8 @@ namespace SentientArchitect.Data.Postgres.Migrations
 
                     b.Property<string>("AgentType")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Knowledge");
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("ContextMode")
                         .IsRequired()
@@ -382,14 +383,6 @@ namespace SentientArchitect.Data.Postgres.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DetectedScope")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("DetectedStack")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("PreferredStack")
                         .HasMaxLength(120)

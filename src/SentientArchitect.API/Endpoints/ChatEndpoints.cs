@@ -34,7 +34,6 @@ public class ChatEndpoints : IEndpointModule
                     conversationId,
                     userId,
                     body.Message,
-                    body.AgentType,
                     body.ActiveRepositoryId,
                     body.PreferredStack,
                     body.ContextMode),
@@ -72,7 +71,6 @@ public class ChatEndpoints : IEndpointModule
 
     private record ChatRequest(
         string Message,
-        string AgentType = "Knowledge",
         Guid? ActiveRepositoryId = null,
         string? PreferredStack = null,
         ConsultantContextMode? ContextMode = null);

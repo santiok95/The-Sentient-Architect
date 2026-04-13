@@ -10,7 +10,7 @@ public class CreateConversationUseCase(IApplicationDbContext db)
         CreateConversationRequest request,
         CancellationToken ct = default)
     {
-        var conversation = new Conversation(request.UserId, request.TenantId, request.Title);
+        var conversation = new Conversation(request.UserId, request.TenantId, request.Title, request.AgentType);
 
         db.Conversations.Add(conversation);
         await db.SaveChangesAsync(ct);

@@ -11,7 +11,8 @@ public record ConversationMessageDto(
 
 public record GetConversationDetailResponse(
     Guid Id,
-    string Objective,
+    string Title,
+    string AgentType,
     string Mode,
     string Status,
     int MessageCount,

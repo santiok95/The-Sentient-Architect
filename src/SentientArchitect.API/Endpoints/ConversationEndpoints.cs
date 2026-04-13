@@ -7,6 +7,7 @@ using SentientArchitect.Application.Features.Conversations.CreateConversation;
 using SentientArchitect.Application.Features.Conversations.DeleteConversation;
 using SentientArchitect.Application.Features.Conversations.GetConversationDetail;
 using SentientArchitect.Application.Features.Conversations.GetConversations;
+using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -27,7 +28,7 @@ public class ConversationEndpoints : IEndpointModule
             var userId   = userAccessor.GetCurrentUserId();
             var tenantId = userAccessor.GetCurrentTenantId();
 
-            var request = new CreateConversationRequest(userId, tenantId, body.Title ?? "New Conversation");
+            var request = new CreateConversationRequest(userId, tenantId, body.Title ?? "New Conversation", body.AgentType);
             var result  = await useCase.ExecuteAsync(request, ct);
 
             return result.ToCreatedResult($"/api/v1/conversations/{result.Data?.ConversationId}");
@@ -83,5 +84,5 @@ public class ConversationEndpoints : IEndpointModule
         .WithOpenApi();
     }
 
-    private record CreateConversationHttpRequest(string? Title = null);
+    private record CreateConversationHttpRequest(string? Title = null, AgentType AgentType = AgentType.Knowledge);
 }

@@ -133,6 +133,7 @@ public static class InfrastructureServiceExtensions
         // ── Chat orchestration adapters ─────────────────────────────────────
         services.AddScoped<AnthropicOrchestrator>();
         services.AddScoped<IChatExecutionService, ChatExecutionService>();
+        services.AddScoped<IIntentExtractor, IntentExtractor>();
 
         // ── HTTP Client & Cloud Resilience (Polly v8) ─────────────────────────────────
         services.AddHttpClient();

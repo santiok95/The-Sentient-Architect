@@ -22,7 +22,8 @@ public sealed class ChatExecutionService(
     SummaryPlugin summaryPlugin,
     RepositoryContextPlugin repositoryContextPlugin,
     IApplicationDbContext db,
-    IUserAccessor userAccessor) : IChatExecutionService
+    IUserAccessor userAccessor,
+    IIntentExtractor intentExtractor) : IChatExecutionService
 {
     private const string KnowledgeSystemPrompt = """
         You are the Knowledge Agent for The Sentient Architect.
@@ -80,7 +81,7 @@ public sealed class ChatExecutionService(
     {
         try
         {
-            var isConsultant = string.Equals(request.AgentType, "Consultant", StringComparison.OrdinalIgnoreCase);
+            var isConsultant = request.AgentType == Domain.Enums.AgentType.Consultant;
 
             var kernel = isConsultant
                 ? consultantFactory.CreateKernel(services)
@@ -129,11 +130,11 @@ public sealed class ChatExecutionService(
             $"Retrieved project knowledge (source of truth):\n{retrievedContext}\n\n" +
             "Output policy (high fidelity + clear teaching):\n" +
             "1. Use this structure: 'Regla actual del proyecto' -> 'Por que importa' -> 'Ejemplo aplicado al proyecto' -> optional 'Alternativa generica (no normativa del proyecto)'.\n" +
-            "2. Quote at least one exact fragment and include the source title.\n" +
-            "3. If a quoted fragment is in English, immediately add a short Spanish explanation below it. Keep technical identifiers unchanged (Result, Success, Failure, DELETE, HTTP 204, ToHttpResult).\n" +
-            "4. Never mix normative project rule and generic advice in the same sentence. Label generic advice explicitly.\n" +
-            "5. If retrieved rule states static property style, write it exactly as property access (Result.Success), not method style (Result.Success()).\n" +
-            "6. Keep examples aligned with project conventions (e.g., avoid repository pattern if project rule says no repository pattern).\n" +
+            "2. Quote at least one exact fragment from the retrieved knowledge. Quote it in Spanish — translate it if the original is in English, keeping technical identifiers unchanged (Result, Success, Failure, DELETE, HTTP 204, ToHttpResult). ALWAYS end the quote block with a line that reads exactly: '> Fuente: <document title>'.\n" +
+            "3. Never mix normative project rule and generic advice in the same sentence. Label generic advice explicitly.\n" +
+            "4. If retrieved rule states static property style, write it exactly as property access (Result.Success), not method style (Result.Success()).\n" +
+            "5. Keep examples aligned with project conventions (e.g., avoid repository pattern if project rule says no repository pattern).\n" +
+            "6. In folder structure examples, do NOT use 'SentientArchitect' as the root folder name. Infer a short descriptive name from the user's request (e.g. 'PdfGenerator', 'AuthService', 'NotificationWorker'). If unsure, use 'MyApp'.\n" +
             "7. Keep response concise, explicit, and auditable.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
@@ -152,7 +153,7 @@ public sealed class ChatExecutionService(
         }
 
         return Result<ChatExecutionResponse>.SuccessWith(
-            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), "Knowledge"));
+            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Knowledge));
     }
 
     private async Task<Result<ChatExecutionResponse>> RunDeterministicConsultantFlowAsync(
@@ -164,8 +165,8 @@ public sealed class ChatExecutionService(
     {
         var userId = userAccessor.GetCurrentUserId();
 
+        // Load with tracking so we can persist detected intent
         var conversation = await db.Conversations
-            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == userId, ct);
 
         var resolvedMode = request.ContextMode ?? conversation?.ContextMode ?? ConsultantContextMode.Auto;
@@ -173,10 +174,43 @@ public sealed class ChatExecutionService(
         var resolvedRepositoryId = request.ActiveRepositoryId ?? conversation?.ActiveRepositoryId;
         var explicitStackInRequest = !string.IsNullOrWhiteSpace(request.PreferredStack);
 
-        if (ShouldAskClarification(request.Message, resolvedMode, resolvedStack, resolvedRepositoryId))
+        // In Auto mode, use the LLM to extract intent from the message — no hardcoded keywords.
+        // Persist detected stack/scope so follow-up messages don't need to ask again.
+        if (resolvedMode == ConsultantContextMode.Auto && conversation is not null)
         {
-            return Result<ChatExecutionResponse>.SuccessWith(
-                new ChatExecutionResponse(BuildClarificationPrompt(), "Consultant"));
+            var hasEnoughContext = !string.IsNullOrWhiteSpace(resolvedStack) ||
+                                   resolvedRepositoryId.HasValue ||
+                                   !string.IsNullOrWhiteSpace(conversation.DetectedStack) ||
+                                   !string.IsNullOrWhiteSpace(conversation.DetectedScope);
+
+            // Only extract intent if we don't already have it persisted from a previous message
+            if (!hasEnoughContext || string.IsNullOrWhiteSpace(conversation.DetectedScope))
+            {
+                var intent = await intentExtractor.ExtractAsync(request.Message, ct);
+
+                if (!string.IsNullOrWhiteSpace(intent.Stack) || !string.IsNullOrWhiteSpace(intent.Scope))
+                {
+                    conversation.UpdateDetectedIntent(intent.Stack, intent.Scope);
+                    await db.SaveChangesAsync(ct);
+                }
+
+                // Merge detected stack into resolved stack if not already set
+                if (string.IsNullOrWhiteSpace(resolvedStack) && !string.IsNullOrWhiteSpace(intent.Stack))
+                    resolvedStack = intent.Stack;
+
+                // Ask clarification only if LLM says we genuinely need it
+                if (intent.NeedsScope || (intent.NeedsStack && string.IsNullOrWhiteSpace(resolvedStack)))
+                {
+                    var clarification = BuildClarificationPrompt(intent.NeedsScope, intent.NeedsStack, resolvedRepositoryId);
+                    return Result<ChatExecutionResponse>.SuccessWith(
+                        new ChatExecutionResponse(clarification, Domain.Enums.AgentType.Consultant));
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(conversation.DetectedStack) && string.IsNullOrWhiteSpace(resolvedStack))
+            {
+                // Reuse previously detected stack from an earlier message
+                resolvedStack = conversation.DetectedStack;
+            }
         }
 
         // Plugins share the same scoped DbContext; keep this flow sequential to avoid
@@ -283,38 +317,29 @@ public sealed class ChatExecutionService(
         }
 
         return Result<ChatExecutionResponse>.SuccessWith(
-            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), "Consultant"));
+            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Consultant));
     }
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
-    private static bool ShouldAskClarification(
-        string message,
-        ConsultantContextMode mode,
-        string? preferredStack,
-        Guid? activeRepositoryId)
+    private static string BuildClarificationPrompt(bool needsScope, bool needsStack, Guid? activeRepositoryId)
     {
-        if (mode != ConsultantContextMode.Auto)
-            return false;
+        // One question at a time — ask the most important missing piece first.
+        if (needsScope && !activeRepositoryId.HasValue)
+            return "¿Es para una app nueva desde cero o para un proyecto existente?\n\n" +
+                   "Con eso puedo darte una recomendación concreta en lugar de una genérica.";
 
-        if (activeRepositoryId.HasValue || !string.IsNullOrWhiteSpace(preferredStack))
-            return false;
+        if (needsScope && activeRepositoryId.HasValue)
+            return "¿Querés trabajar sobre el repo que tenés activo o es un caso nuevo independiente?";
 
-        var msg = message.ToLowerInvariant();
-        var isBroadDesignPrompt = msg.Contains("dise") || msg.Contains("arquitect") ||
-                                  msg.Contains("system") || msg.Contains("sistema") ||
-                                  msg.Contains("app") || msg.Contains("aplicaci");
+        if (needsStack)
+            return "¿Con qué stack o lenguaje querés implementar esto?\n\n" +
+                   "No hace falta que sea preciso — con \"algo moderno para backend\" o \"el lenguaje de Google\" ya me alcanza.";
 
-        return isBroadDesignPrompt;
+        // Fallback — shouldn't reach here but just in case
+        return "Para darte la mejor recomendación: ¿es para un proyecto existente o una app nueva?";
     }
-
-    private static string BuildClarificationPrompt()
-        => "Antes de proponer una arquitectura concreta necesito dos definiciones para evitar recomendaciones fuera de contexto:\n" +
-           "1. Queres una respuesta para ESTE proyecto/repo o una respuesta generica?\n" +
-           "2. Que stack queres usar para la implementacion (por ejemplo C#/.NET, Java/Spring, Go, Node)?\n" +
-           "3. Si hay conflicto entre repo y stack, cual es tu intencion? (a) Optimizar repo actual, (b) Coexistencia/hibrido, (c) Migracion completa.\n\n" +
-           "Si queres respuesta para este repo, tambien podes pasar activeRepositoryId y el modo RepoBound para anclar la recomendacion al codigo real.";
 
     private static string FinalizeAssistantMessage(string message)
     {
