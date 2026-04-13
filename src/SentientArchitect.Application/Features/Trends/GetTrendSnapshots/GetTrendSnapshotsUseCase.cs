@@ -18,8 +18,21 @@ public class GetTrendSnapshotsUseCase(IApplicationDbContext db)
         if (trend is null)
             return Result<GetTrendSnapshotsResponse>.Failure([$"Trend '{request.TrendId}' not found."]);
 
+        static string ToTraction(Domain.Enums.TrendDirection d) => d switch
+        {
+            Domain.Enums.TrendDirection.Rising    => "Growing",
+            Domain.Enums.TrendDirection.Stable    => "Mainstream",
+            Domain.Enums.TrendDirection.Declining => "Declining",
+            _                                     => "Mainstream",
+        };
+
         var snapshots = trend.Snapshots
-            .Select(s => new SnapshotItem(s.Date, s.Score, s.Direction, s.Notes))
+            .OrderBy(s => s.Date)
+            .Select(s => new SnapshotItem(
+                ToTraction(s.Direction),
+                s.Score * 100f,
+                s.Date.ToString("yyyy-MM-dd"),
+                s.Notes))
             .ToList();
 
         return Result<GetTrendSnapshotsResponse>.SuccessWith(new GetTrendSnapshotsResponse(snapshots));

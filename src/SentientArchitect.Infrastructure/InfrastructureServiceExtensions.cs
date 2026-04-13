@@ -82,23 +82,37 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IUserAccessor, UserAccessor>();
         services.AddScoped<IdentitySeeder>();
 
-        // ── AI — Chat (Anthropic) ─────────────────────────────────────────────
-        var anthropicKey = configuration["AI:Anthropic:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(anthropicKey))
+        // ── AI — Chat (configurable: "OpenAI" | "Anthropic") ────────────────
+        var chatProvider = configuration["AI:ChatProvider"] ?? "Anthropic";
+
+        if (chatProvider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
-            var chatModel = configuration["AI:Anthropic:ChatModel"] ?? "claude-haiku-4-5-20251001";
+            var openAiChatKey   = configuration["AI:OpenAI:ApiKey"]
+                ?? throw new InvalidOperationException("AI:OpenAI:ApiKey is required when AI:ChatProvider is 'OpenAI'.");
+            var openAiChatModel = configuration["AI:OpenAI:ChatModel"] ?? "gpt-4o-mini";
 
-            IChatClient anthropicClient = new AnthropicClient(anthropicKey).Messages
-                .AsBuilder()
-                .ConfigureOptions(o => o.ModelId ??= chatModel)
-                .Build();
+#pragma warning disable SKEXP0010
+            services.AddSingleton<IChatCompletionService>(
+                new OpenAIChatCompletionService(openAiChatModel, openAiChatKey));
+#pragma warning restore SKEXP0010
+        }
+        else
+        {
+            var anthropicKey = configuration["AI:Anthropic:ApiKey"];
+            if (!string.IsNullOrWhiteSpace(anthropicKey))
+            {
+                var chatModel = configuration["AI:Anthropic:ChatModel"] ?? "claude-haiku-4-5-20251001";
 
-            // SK 1.74.0 natively bridges IChatClient → IChatCompletionService
-            // This handles tool calling, streaming, and all protocol mapping automatically
+                IChatClient anthropicClient = new AnthropicClient(anthropicKey).Messages
+                    .AsBuilder()
+                    .ConfigureOptions(o => o.ModelId ??= chatModel)
+                    .Build();
+
 #pragma warning disable SKEXP0001
-            services.AddSingleton<IChatCompletionService>(sp =>
-                anthropicClient.AsChatCompletionService());
+                services.AddSingleton<IChatCompletionService>(sp =>
+                    anthropicClient.AsChatCompletionService());
 #pragma warning restore SKEXP0001
+            }
         }
 
         // ── AI — Embeddings (OpenAI) ───────────────────────────────────────────

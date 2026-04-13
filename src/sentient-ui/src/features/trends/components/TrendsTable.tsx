@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, Minus, ArrowUpRight, RefreshCw, Filter } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, ArrowUpRight, RefreshCw, Filter, Star, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,6 +16,22 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useTrends, TREND_CATEGORIES, TRACTION_LEVELS } from '../hooks/useTrends'
 import type { Trend, TractionLevel } from '@/lib/api.types'
+
+// ─── Category labels ──────────────────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  Framework:    'Framework',
+  Language:     'Lenguaje',
+  Tool:         'Herramienta',
+  Pattern:      'Patrón',
+  Platform:     'Plataforma',
+  Library:      'Librería',
+  BestPractice: 'Buenas Prácticas',
+  Innovation:   'Innovación',
+  Architecture: 'Arquitectura',
+  DevOps:       'DevOps',
+  Testing:      'Testing',
+}
 
 // ─── Traction level config ─────────────────────────────────────────────────────
 
@@ -57,23 +73,48 @@ function TrendRow({ trend }: { trend: Trend }) {
   const Icon = config.icon
   const date = new Date(trend.lastUpdatedAt)
   const dateStr = date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })
+  const categoryLabel = CATEGORY_LABELS[trend.category] ?? trend.category
 
   return (
     <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
       {/* Name + summary */}
       <td className="py-3.5 px-4">
-        <p className="font-mono text-sm font-medium text-foreground leading-tight">
-          {trend.name}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 max-w-xs">
-          {trend.summary}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="font-mono text-sm font-medium text-foreground leading-tight">
+            {trend.name}
+          </p>
+          {trend.gitHubUrl && (
+            <a
+              href={trend.gitHubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+        {trend.summary && (
+          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1 max-w-xs">
+            {trend.summary}
+          </p>
+        )}
+        {trend.starCount && trend.starCount > 0 && (
+          <div className="mt-0.5 flex items-center gap-1 text-xs text-amber-400/80">
+            <Star className="h-2.5 w-2.5 fill-current" />
+            <span className="font-mono tabular-nums">
+              {trend.starCount >= 1000
+                ? `${(trend.starCount / 1000).toFixed(1)}k`
+                : trend.starCount}
+            </span>
+          </div>
+        )}
       </td>
 
       {/* Category */}
       <td className="py-3.5 px-4">
         <span className="font-mono text-xs text-muted-foreground">
-          {trend.category}
+          {categoryLabel}
         </span>
       </td>
 
@@ -165,7 +206,9 @@ export function TrendsTable() {
           <SelectContent>
             <SelectItem value="">Todas las categorías</SelectItem>
             {TREND_CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c} className="font-mono text-xs">{c}</SelectItem>
+              <SelectItem key={c} value={c} className="font-mono text-xs">
+                {CATEGORY_LABELS[c] ?? c}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

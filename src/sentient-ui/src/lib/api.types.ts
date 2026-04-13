@@ -89,17 +89,18 @@ export interface Trend {
   category: string
   tractionLevel: TractionLevel
   relevanceScore: number
-  summary: string
+  summary: string | null
   sources: string[]
-  firstDetectedAt: string
   lastUpdatedAt: string
+  starCount: number | null
+  gitHubUrl: string | null
 }
 
 export interface TrendSnapshot {
   tractionLevel: TractionLevel
-  mentionCount: number
   sentimentScore: number
   snapshotDate: string
+  notes: string | null
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────

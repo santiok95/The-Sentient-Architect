@@ -60,8 +60,8 @@ export function useTrendSnapshots(id: string | null) {
 // ─── Category + Traction constants (for filter dropdowns) ────────────────────
 
 export const TREND_CATEGORIES = [
-  'AI/ML', 'Architecture', 'Backend', 'Database', 'Frontend',
-  'Framework', 'ORM/Data', 'Runtime', 'API',
+  'Framework', 'Language', 'Tool', 'Pattern', 'Platform', 'Library',
+  'BestPractice', 'Innovation', 'Architecture', 'DevOps', 'Testing',
 ] as const
 
 export const TRACTION_LEVELS = ['Emerging', 'Growing', 'Mainstream', 'Declining'] as const

@@ -5,9 +5,13 @@ namespace SentientArchitect.Application.Features.Trends.GetTrends;
 public record TrendItem(
     Guid Id,
     string Name,
-    TrendCategory Category,
-    TrendDirection Direction,
+    string Category,
+    string TractionLevel,
     float RelevanceScore,
-    string? Description);
+    string? Summary,
+    List<string> Sources,
+    string LastUpdatedAt,
+    int? StarCount,
+    string? GitHubUrl);
 
-public record GetTrendsResponse(List<TrendItem> Trends);
+public record GetTrendsResponse(List<TrendItem> Items, int TotalCount, int Page, int PageSize);

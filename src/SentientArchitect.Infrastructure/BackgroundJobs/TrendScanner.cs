@@ -22,9 +22,27 @@ public sealed class TrendScanner(
 {
     // ── Source URLs ──────────────────────────────────────────────────────────
 
-    private const string GitHubTrendingUrl = "https://github.com/trending";
     private const string HnTopStoriesUrl   = "https://hacker-news.firebaseio.com/v0/topstories.json";
     private const string HnItemUrl         = "https://hacker-news.firebaseio.com/v0/item/{0}.json";
+
+    // GitHub Search API — no auth required, 60 req/h unauthenticated
+    private const string GitHubSearchUrl =
+        "https://api.github.com/search/repositories?q={0}&sort=stars&order=desc&per_page=10";
+
+    // Architecture-focused search queries for GitHub Search API
+    private static readonly (string Query, string Category)[] GitHubSearchQueries =
+    [
+        ("topic:software-architecture stars:>1000",     "Architecture"),
+        ("topic:design-patterns stars:>500",            "BestPractice"),
+        ("topic:clean-architecture stars:>500",         "BestPractice"),
+        ("topic:microservices stars:>1000",             "Architecture"),
+        ("topic:devops stars:>1000",                    "DevOps"),
+        ("topic:testing stars:>1000",                   "Testing"),
+        ("topic:machine-learning stars:>2000",          "Innovation"),
+        ("topic:dotnet stars:>500",                     "Framework"),
+        ("topic:observability stars:>500",              "DevOps"),
+        ("topic:event-driven stars:>300",               "Pattern"),
+    ];
 
     // Dev.to public API — no key required
     private const string DevToApiUrl = "https://dev.to/api/articles?per_page=20&tag={0}";
@@ -81,7 +99,7 @@ public sealed class TrendScanner(
         // Collect from all sources in parallel
         var tasks = new[]
         {
-            FetchGitHubTrendingAsync(ct),
+            FetchGitHubStarredReposAsync(ct),
             FetchHackerNewsAsync(ct),
             FetchDevToAsync(ct),
             FetchMediumRssAsync(ct),
@@ -114,58 +132,59 @@ public sealed class TrendScanner(
         await UpsertTrendsAsync(trendItems, ct);
     }
 
-    // ── GitHub Trending ──────────────────────────────────────────────────────
+    // ── GitHub Search API (replaces fragile HTML scraping) ───────────────────
 
-    private async Task<List<FeedSignal>> FetchGitHubTrendingAsync(CancellationToken ct)
+    private async Task<List<FeedSignal>> FetchGitHubStarredReposAsync(CancellationToken ct)
     {
-        try
+        var signals = new List<FeedSignal>();
+
+        using var client = httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
+        client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+
+        foreach (var (query, category) in GitHubSearchQueries)
         {
-            using var client = httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("SentientArchitect/1.0");
+            if (ct.IsCancellationRequested) break;
 
-            var html  = await client.GetStringAsync(GitHubTrendingUrl, ct);
-            var repos = ParseGitHubRepoNames(html);
+            try
+            {
+                var url  = string.Format(GitHubSearchUrl, Uri.EscapeDataString(query));
+                var json = await client.GetStringAsync(url, ct);
 
-            logger.LogInformation("GitHub Trending: {Count} repos.", repos.Count);
-            return repos.Select(r => new FeedSignal(r, "https://github.com/trending", SignalSource.GitHubTrending)).ToList();
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "GitHub Trending fetch failed.");
-            return [];
-        }
-    }
+                using var doc = JsonDocument.Parse(json);
+                if (!doc.RootElement.TryGetProperty("items", out var items)) continue;
 
-    private static List<string> ParseGitHubRepoNames(string html)
-    {
-        var results   = new List<string>();
-        var searchTag = "<h2 class=\"h3 lh-condensed\">";
-        var pos       = 0;
+                foreach (var repo in items.EnumerateArray())
+                {
+                    var name        = repo.TryGetProperty("full_name", out var fn) ? fn.GetString() : null;
+                    var description = repo.TryGetProperty("description", out var d)  ? d.GetString() : null;
+                    var htmlUrl     = repo.TryGetProperty("html_url", out var hu)    ? hu.GetString() : null;
+                    var stars       = repo.TryGetProperty("stargazers_count", out var s) ? s.GetInt32() : 0;
+                    var language    = repo.TryGetProperty("language", out var l)     ? l.GetString() : null;
 
-        while (results.Count < 25)
-        {
-            var tagStart = html.IndexOf(searchTag, pos, StringComparison.Ordinal);
-            if (tagStart < 0) break;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
 
-            var hrefStart = html.IndexOf("<a ", tagStart, StringComparison.Ordinal);
-            if (hrefStart < 0) break;
+                    var text = $"[GitHub:{category}] {name} ★{stars}";
+                    if (!string.IsNullOrWhiteSpace(description))
+                        text += $" — {description[..Math.Min(150, description.Length)]}";
+                    if (!string.IsNullOrWhiteSpace(language))
+                        text += $" [{language}]";
 
-            var closeTag = html.IndexOf('>', hrefStart);
-            if (closeTag < 0) break;
+                    signals.Add(new FeedSignal(text, htmlUrl ?? $"https://github.com/{name}", SignalSource.GitHubSearch, stars, category));
+                }
 
-            var endTag = html.IndexOf("</a>", closeTag, StringComparison.Ordinal);
-            if (endTag < 0) break;
-
-            var repoName = html[(closeTag + 1)..endTag]
-                .Replace("\n", "").Replace(" ", "").Trim();
-
-            if (!string.IsNullOrWhiteSpace(repoName))
-                results.Add(repoName);
-
-            pos = endTag;
+                // Respect GitHub rate limit: 60 req/h unauthenticated → ~1s gap between queries
+                await Task.Delay(1100, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "GitHub Search failed for query '{Query}'.", query);
+            }
         }
 
-        return results;
+        logger.LogInformation("GitHub Search: {Count} repos.", signals.Count);
+        return signals;
     }
 
     // ── Hacker News ──────────────────────────────────────────────────────────
@@ -444,20 +463,28 @@ public sealed class TrendScanner(
 
         var prompt =
             "You are a technology trend analyst for a developer knowledge platform.\n" +
-            "Analyze the following signals collected from GitHub Trending, Hacker News, Dev.to, Medium, and GitHub Releases.\n" +
-            "Identify up to 12 distinct technology trends visible in this data." +
+            "Analyze the following signals collected from GitHub Search (starred repos), Hacker News, Dev.to, Medium, and GitHub Releases.\n" +
+            "Signals prefixed with [GitHub:CategoryHint] come from high-starred architecture repositories — give them extra weight.\n" +
+            "Identify up to 15 distinct technology trends visible in this data." +
             profileSection + "\n\n" +
             "For each trend, provide:\n" +
-            "- name: the technology, tool, language, framework, or pattern name\n" +
-            "- category: one of Framework, Language, Tool, Pattern, Platform, Library\n" +
+            "- name: the technology, tool, language, framework, or pattern name (derive from the repo/article, not the category hint)\n" +
+            "- category: one of Framework, Language, Tool, Pattern, Platform, Library, BestPractice, Innovation, Architecture, DevOps, Testing\n" +
+            "  * BestPractice: coding conventions, SOLID, clean code, DDD, CQRS, design patterns\n" +
+            "  * Innovation: emerging tech, AI/ML tooling, novel paradigms, experimental frameworks\n" +
+            "  * Architecture: system design, distributed systems, microservices, hexagonal arch\n" +
+            "  * DevOps: CI/CD, containers, IaC, observability, platform engineering\n" +
+            "  * Testing: TDD, BDD, contract testing, test frameworks\n" +
             "- direction: one of Rising, Stable, Declining\n" +
-            "- score: relevance score 0.0–1.0 (boost score if relevant to the user community context above)\n" +
+            "- score: relevance score 0.0–1.0 (boost score if relevant to the user community context above; repos with ★10000+ deserve score ≥ 0.7)\n" +
             "- description: 1-2 sentences on why this is trending and why it matters to developers\n" +
-            "- sources: URLs from the signals that contributed to this trend\n\n" +
+            "- sources: URLs from the signals that contributed to this trend\n" +
+            "- starCount: integer star count if available from a [GitHub:*] signal, otherwise omit or null\n" +
+            "- githubUrl: the GitHub repo URL if available from a [GitHub:*] signal, otherwise omit or null\n\n" +
             "Return ONLY a raw JSON array, no markdown, no code blocks:\n" +
             "[\n" +
-            "  {\"name\":\"Rust\",\"category\":\"Language\",\"direction\":\"Rising\",\"score\":0.85," +
-            "\"description\":\"Trending for systems and WASM.\",\"sources\":[\"https://github.com/trending\"]}\n" +
+            "  {\"name\":\"EventStorming\",\"category\":\"BestPractice\",\"direction\":\"Rising\",\"score\":0.82," +
+            "\"description\":\"DDD technique gaining traction.\",\"sources\":[\"https://github.com/...\"],\"starCount\":4200,\"githubUrl\":\"https://github.com/...\"}\n" +
             "]\n\n" +
             "Signals:\n" + signalBlock;
 
@@ -515,6 +542,9 @@ public sealed class TrendScanner(
 
             trend.UpdateRelevance(item.Score, item.Direction, item.Description);
 
+            if (item.StarCount.HasValue && item.StarCount > 0)
+                trend.UpdateGitHubStats(item.StarCount.Value, item.GitHubUrl);
+
             foreach (var source in item.Sources)
                 trend.AddSource(source);
 
@@ -537,14 +567,19 @@ public sealed class TrendScanner(
 
     private enum SignalSource
     {
-        GitHubTrending,
+        GitHubSearch,
         HackerNews,
         DevTo,
         MediumRss,
         GitHubReleases
     }
 
-    private record FeedSignal(string Text, string Url, SignalSource Source);
+    private record FeedSignal(
+        string Text,
+        string Url,
+        SignalSource Source,
+        int StarCount = 0,
+        string? CategoryHint = null);
 
     private sealed class TrendItem
     {
@@ -554,5 +589,7 @@ public sealed class TrendScanner(
         public float Score { get; init; }
         public string? Description { get; init; }
         public List<string> Sources { get; init; } = [];
+        public int? StarCount { get; init; }
+        public string? GitHubUrl { get; init; }
     }
 }

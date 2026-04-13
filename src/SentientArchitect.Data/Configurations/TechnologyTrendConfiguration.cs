@@ -18,6 +18,8 @@ public class TechnologyTrendConfiguration : IEntityTypeConfiguration<TechnologyT
         builder.Property(t => t.Description).HasMaxLength(2000);
         builder.Property(t => t.Sources).IsRequired().HasColumnType("jsonb");
         builder.Property(t => t.LastScannedAt).IsRequired();
+        builder.Property(t => t.StarCount);
+        builder.Property(t => t.GitHubUrl).HasMaxLength(500);
         builder.Property(t => t.CreatedAt).IsRequired();
 
         builder.HasMany(t => t.Snapshots)

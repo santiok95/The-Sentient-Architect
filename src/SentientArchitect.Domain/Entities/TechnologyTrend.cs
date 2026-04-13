@@ -29,6 +29,8 @@ public class TechnologyTrend : BaseEntity
     public string? Description { get; private set; }
     public List<string> Sources { get; private set; }
     public DateTime LastScannedAt { get; private set; }
+    public int? StarCount { get; private set; }
+    public string? GitHubUrl { get; private set; }
 
     public ICollection<TrendSnapshot> Snapshots { get; private set; }
 
@@ -38,6 +40,13 @@ public class TechnologyTrend : BaseEntity
         Direction = direction;
         Description = description;
         LastScannedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateGitHubStats(int starCount, string? githubUrl)
+    {
+        StarCount = starCount;
+        if (!string.IsNullOrWhiteSpace(githubUrl))
+            GitHubUrl = githubUrl;
     }
 
     public void AddSource(string url)

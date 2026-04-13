@@ -40,6 +40,21 @@ public class AdminEndpoints : IEndpointModule
         })
         .WithName("ReviewPublishRequest")
         .WithOpenApi();
+
+        group.MapPost("/trends/sync", async (
+            [FromServices] ITrendScanner scanner,
+            CancellationToken ct) =>
+        {
+            // Fire-and-forget — don't block the HTTP response
+            _ = Task.Run(() => scanner.ScanAsync(CancellationToken.None));
+            return Results.Accepted("/api/v1/admin/trends/sync", new
+            {
+                message = "Trend scan initiated in background.",
+                estimatedDurationMinutes = 5
+            });
+        })
+        .WithName("TriggerTrendScan")
+        .WithOpenApi();
     }
 
     private record ReviewPublishRequestHttpRequest(bool Approved, string? RejectionReason = null);
