@@ -30,6 +30,7 @@ public class Conversation : BaseEntity
     public ConversationStatus Status { get; private set; }
     public ConsultantContextMode ContextMode { get; private set; }
     public Guid? ActiveRepositoryId { get; private set; }
+    public string? ActiveRepositoryBranch { get; private set; }
     public string? PreferredStack { get; private set; }
     public string? Summary { get; private set; }
     public int TokenCount { get; private set; }
@@ -79,9 +80,11 @@ public class Conversation : BaseEntity
     public void UpdateConsultantContext(
         Guid? activeRepositoryId,
         string? preferredStack,
-        ConsultantContextMode? contextMode = null)
+        ConsultantContextMode? contextMode = null,
+        string? activeRepositoryBranch = null)
     {
         ActiveRepositoryId = activeRepositoryId;
+        ActiveRepositoryBranch = activeRepositoryBranch;
         PreferredStack = string.IsNullOrWhiteSpace(preferredStack)
             ? null
             : preferredStack.Trim();

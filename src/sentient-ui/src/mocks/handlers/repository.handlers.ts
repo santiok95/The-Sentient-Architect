@@ -2,9 +2,15 @@ import { http, HttpResponse } from 'msw'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
 
+// Fixed UUIDs so conversation.handlers.ts can reference them safely
+export const MOCK_REPO_IDS = {
+  aspire: '11111111-1111-1111-1111-111111111111',
+  extensions: '22222222-2222-2222-2222-222222222222',
+}
+
 const MOCK_REPOSITORIES = [
   {
-    id: 'repo-001',
+    id: MOCK_REPO_IDS.aspire,
     knowledgeItemId: 'ki-004',
     gitUrl: 'https://github.com/dotnet/aspire',
     primaryLanguage: 'C#',
@@ -17,7 +23,7 @@ const MOCK_REPOSITORIES = [
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
-    id: 'repo-002',
+    id: MOCK_REPO_IDS.extensions,
     knowledgeItemId: 'ki-006',
     gitUrl: 'https://github.com/dotnet/extensions',
     primaryLanguage: 'C#',
@@ -32,7 +38,7 @@ const MOCK_REPOSITORIES = [
 ]
 
 const MOCK_REPORTS: Record<string, object> = {
-  'repo-001': {
+  [MOCK_REPO_IDS.aspire]: {
     repositoryInfo: {
       gitUrl: 'https://github.com/dotnet/aspire',
       primaryLanguage: 'C#',
@@ -110,17 +116,17 @@ export const repositoryHandlers = [
     return HttpResponse.json({ items: MOCK_REPOSITORIES, totalCount: MOCK_REPOSITORIES.length })
   }),
 
-  http.get(`${BASE_URL}/api/v1/repositories/:knowledgeItemId/analysis`, ({ params }) => {
-    const report = MOCK_REPORTS[params.knowledgeItemId as string]
+  http.get(`${BASE_URL}/api/v1/repositories/:repositoryId/analysis`, ({ params }) => {
+    const report = MOCK_REPORTS[params.repositoryId as string]
     if (!report) return new HttpResponse(null, { status: 404 })
     return HttpResponse.json(report)
   }),
 
-  http.get(`${BASE_URL}/api/v1/repositories/:knowledgeItemId/analysis/:reportId/findings`, () => {
+  http.get(`${BASE_URL}/api/v1/repositories/:repositoryId/analysis/:reportId/findings`, () => {
     return HttpResponse.json({ items: MOCK_FINDINGS, totalCount: MOCK_FINDINGS.length })
   }),
 
-  http.post(`${BASE_URL}/api/v1/repositories/:knowledgeItemId/reanalyze`, () => {
+  http.post(`${BASE_URL}/api/v1/repositories/:repositoryId/reanalyze`, () => {
     return HttpResponse.json(
       { reportId: `rpt-${Date.now()}`, message: 'Re-analysis queued' },
       { status: 202 },

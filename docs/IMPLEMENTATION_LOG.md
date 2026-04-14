@@ -122,6 +122,25 @@
 - **Why:** Garantizar un flujo predecible, evitar excepciones de control y asegurar que los errores en el flujo de SignalR (`ReceiveError`) se reporten de forma coherente.
 - **Lección Aprendida:** Un flujo de resultados consistente simplifica drásticamente el manejo de errores en sistemas asíncronos y distribuidos como SignalR.
 
+## Feature — Guardian → Consultant RepoBound Integration (2026-04-13)
+
+**Branch:** `feature/guardian-consultant-repobound`
+
+**Goal:** Junior sube su repo al Guardian → puede conversar con el Consultant sobre ese repo específico, con el agente anclado al contexto del código analizado.
+
+| Fase | Descripción | Status |
+|------|-------------|--------|
+| 1 | Backend: `CreateConversation` acepta `ActiveRepositoryId` opcional y setea `ContextMode = RepoBound` | 🔄 |
+| 2 | Backend: verificar `RepositoryContextPlugin` filtra findings por repo específico | 📋 |
+| 3 | Frontend: selector de repo al crear conversación Consultant (solo repos con `processingStatus = Completed`) | 📋 |
+| 4 | Frontend: badge de repo activo en `ChatPanel` header, visible durante toda la conversación | 📋 |
+| 5 | Mocks: sincronizar `conversation.handlers` con `agentType`, `contextMode`, `activeRepositoryId` | 📋 |
+
+**Decisiones de diseño:**
+- Al crear con `ActiveRepositoryId`, el `ContextMode` se fuerza a `RepoBound` automáticamente
+- Por defecto se usa `main` (el `DefaultBranch` del repo); escalable a multi-branch en futuro
+- Repos sin análisis completo (`processingStatus !== 'Completed'`) no aparecen en el selector — no tiene sentido consultar sobre un repo sin datos
+
 ## Issues & Solutions
 _None yet — will be populated during implementation._
 

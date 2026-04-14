@@ -32,7 +32,7 @@ export interface OfflineQueueItem {
   payload: {
     conversationId: string
     content: string
-    mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
+    contextMode?: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
   }
   queuedAt: string
   retryCount: number

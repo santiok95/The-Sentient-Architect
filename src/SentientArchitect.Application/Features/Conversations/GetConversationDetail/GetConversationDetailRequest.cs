@@ -1,3 +1,3 @@
 namespace SentientArchitect.Application.Features.Conversations.GetConversationDetail;
 
-public record GetConversationDetailRequest(Guid ConversationId);
+public record GetConversationDetailRequest(Guid ConversationId, Guid UserId);

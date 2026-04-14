@@ -19,6 +19,10 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
         if (conversation is null)
             return Result<GetConversationDetailResponse>.Failure(["Conversation not found."], ErrorType.NotFound);
 
+        // Ownership check — conversation must belong to the requesting user
+        if (conversation.UserId != request.UserId)
+            return Result<GetConversationDetailResponse>.Failure(["Access denied."], ErrorType.Forbidden);
+
         var messages = conversation.Messages
             .OrderBy(m => m.CreatedAt)
             .Select(m => new ConversationMessageDto(
@@ -29,6 +33,20 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
                 m.RetrievedContextIds))
             .ToList();
 
+        // Use the branch persisted at conversation creation time.
+        // Resolving from the live repo would change the context retroactively if the default branch changes.
+        string? repoUrl    = null;
+        string? repoBranch = conversation.ActiveRepositoryBranch;
+
+        if (conversation.ActiveRepositoryId.HasValue)
+        {
+            repoUrl = await db.Repositories
+                .AsNoTracking()
+                .Where(r => r.Id == conversation.ActiveRepositoryId.Value)
+                .Select(r => r.RepositoryUrl)
+                .FirstOrDefaultAsync(ct);
+        }
+
         var response = new GetConversationDetailResponse(
             conversation.Id,
             conversation.Title,
@@ -38,7 +56,10 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
             conversation.Messages.Count,
             conversation.CreatedAt,
             conversation.UpdatedAt,
-            messages);
+            messages,
+            conversation.ActiveRepositoryId,
+            repoUrl,
+            repoBranch);
 
         return Result<GetConversationDetailResponse>.SuccessWith(response);
     }

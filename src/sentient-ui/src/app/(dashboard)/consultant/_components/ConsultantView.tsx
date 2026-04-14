@@ -28,11 +28,11 @@ export function ConsultantView() {
     onError: ({ error }) => toast.error(error.serverError ?? 'Error al crear conversación'),
   })
 
-  function handleCreateConversation(agentType: AgentType) {
+  function handleCreateConversation(agentType: AgentType, activeRepositoryId?: string) {
     // Clear the active conversation immediately so the chat shows the empty/loading state
     // while the request is in flight. onSuccess will set the real id when it arrives.
     selectConversation(null)
-    createConv({ agentType })
+    createConv({ agentType, activeRepositoryId })
   }
 
   return (
