@@ -44,7 +44,7 @@ function repoShortName(gitUrl: string) {
 interface Props {
   activeId: string | null
   onSelect: (id: string) => void
-  onCreateConversation: (agentType: AgentType, activeRepositoryId?: string) => void
+  onCreateConversation: (agentType: AgentType, activeRepositoryId?: string, repoGitUrl?: string) => void
   isCreating: boolean
   onDeselect: () => void
 }
@@ -244,8 +244,9 @@ export function ConversationList({ activeId, onSelect, onCreateConversation, isC
 
   function handleRepoConfirm() {
     if (!selectedRepoId) return
+    const repo = repos.find((r) => r.id === selectedRepoId)
     setShowRepoPicker(false)
-    onCreateConversation('Consultant', selectedRepoId)
+    onCreateConversation('Consultant', selectedRepoId, repo?.gitUrl)
   }
 
   function handleRepoBack() {

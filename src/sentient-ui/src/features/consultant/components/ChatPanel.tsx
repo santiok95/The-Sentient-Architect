@@ -54,7 +54,7 @@ const CONTEXT_MODE_LABELS: Record<ContextMode, string> = {
 
 interface Props {
   conversationId: string | null
-  onCreateConversation: (agentType: AgentType, activeRepositoryId?: string) => void
+  onCreateConversation: (agentType: AgentType, activeRepositoryId?: string, repoGitUrl?: string) => void
   isCreating: boolean
 }
 
@@ -144,6 +144,9 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
 
   // Streaming state — one in-flight AI message at a time
   const [streamingContent, setStreamingContent] = useState<string | null>(null)
+  // True from the moment ReceiveComplete fires until the transition ends — prevents
+  // the TypingIndicator from re-appearing during the refetch gap.
+  const streamDoneRef = useRef(false)
   // Buffer ref: accumulate chunks without triggering a re-render per token
   const streamBufferRef = useRef('')
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -214,6 +217,11 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
       streamBufferRef.current = ''
     }
 
+    // Mark streaming as done BEFORE the async refetch so the TypingIndicator
+    // doesn't reappear during the gap between setStreamingContent(null) and
+    // the transition ending.
+    streamDoneRef.current = true
+
     // Refetch the conversation so serverMessages is up to date BEFORE releasing the
     // transition. This way useOptimistic hands off to real data, not an empty array.
     if (conversationId) {
@@ -227,6 +235,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
     // Release the transition — useOptimistic now merges with fresh serverMessages
     streamCompleteRef.current?.()
     streamCompleteRef.current = null
+    streamDoneRef.current = false
   }, [conversationId, queryClient])
 
   const handleReceiveError = useCallback((message: string) => {
@@ -234,6 +243,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
     flushTimerRef.current = null
     setStreamingContent(null)
     streamBufferRef.current = ''
+    streamDoneRef.current = false
     toast.error(message ?? 'Error en la respuesta del agente')
     // Release the transition so useOptimistic auto-reverts the optimistic message
     streamCompleteRef.current?.()
@@ -266,6 +276,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
     onSuccess: () => {
       // HTTP 200: message enqueued on server. Start streaming animation.
       // Don't invalidate yet — wait for SignalR ReceiveComplete.
+      streamDoneRef.current = false
       streamBufferRef.current = ''
       setStreamingContent('')
     },
@@ -318,6 +329,8 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
         conversationId,
         content: trimmed,
         contextMode,
+        // Pass the repo so the backend routes to the right RepositoryContextPlugin context
+        activeRepositoryId: conversation?.activeRepositoryId ?? undefined,
       })
       if (result?.serverError) {
         toast.error(result.serverError, { style: { fontFamily: 'var(--font-fira-code)' } })
@@ -325,8 +338,16 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
         streamCompleteRef.current = null
         return
       }
-      // Hold the transition open until SignalR finishes streaming
+      // Hold the transition open until SignalR finishes streaming.
+      // Safety timeout: if ReceiveComplete never fires (hub down, backend error), release after 30s
+      // to avoid the typing indicator getting stuck permanently.
+      const timeout = setTimeout(() => {
+        streamCompleteRef.current?.()
+        streamCompleteRef.current = null
+        setStreamingContent(null)
+      }, 30_000)
       await streamDonePromise
+      clearTimeout(timeout)
     })
   }
 
@@ -414,7 +435,10 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
         )}
 
         <Button
-          onClick={() => onCreateConversation(pendingAgentType, pendingRepoId ?? undefined)}
+          onClick={() => {
+            const repo = completedRepos.find((r) => r.id === pendingRepoId)
+            onCreateConversation(pendingAgentType, pendingRepoId ?? undefined, repo?.gitUrl)
+          }}
           disabled={isCreating || (isConsultant && !pendingRepoId)}
           className="gap-2"
         >
@@ -429,29 +453,34 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
     <div className="flex h-full flex-col">
       {/* Conversation header */}
       {conversation && (
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 shrink-0">
-          <Bot className="h-4 w-4 text-primary" />
-          <p className="flex-1 truncate text-sm font-medium">{conversation.title}</p>
+        <div className="border-b border-border px-4 py-2.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <Bot className="h-4 w-4 text-primary shrink-0" />
+            <p className="flex-1 truncate text-sm font-medium">{conversation.title}</p>
+            <Badge variant="outline" className="text-xs shrink-0">
+              {conversation.agentType}
+            </Badge>
+            {isOffline && (
+              <Badge variant="destructive" className="gap-1 text-xs font-mono shrink-0">
+                <WifiOff className="h-3 w-3" />
+                Offline
+              </Badge>
+            )}
+          </div>
           {conversation.activeRepositoryUrl && (
-            <Badge
-              variant="secondary"
-              className="gap-1 text-xs font-mono max-w-[180px]"
-              title={`${conversation.activeRepositoryUrl} · ${conversation.activeRepositoryBranch ?? 'main'}`}
-            >
-              <GitBranch className="h-3 w-3 shrink-0" />
-              <span className="truncate">
+            <div className="flex items-center gap-1.5 mt-1 ml-6">
+              <GitBranch className="h-3 w-3 text-primary/70 shrink-0" />
+              <span
+                className="text-xs font-mono text-primary/80 truncate"
+                title={`${conversation.activeRepositoryUrl} · ${conversation.activeRepositoryBranch ?? 'main'}`}
+              >
                 {repoShortName(conversation.activeRepositoryUrl)}
               </span>
-            </Badge>
-          )}
-          <Badge variant="outline" className="text-xs">
-            {conversation.agentType}
-          </Badge>
-          {isOffline && (
-            <Badge variant="destructive" className="gap-1 text-xs font-mono">
-              <WifiOff className="h-3 w-3" />
-              Offline
-            </Badge>
+              <span className="text-xs text-muted-foreground">·</span>
+              <span className="text-xs font-mono text-muted-foreground shrink-0">
+                {conversation.activeRepositoryBranch ?? 'main'}
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -492,7 +521,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
               </div>
             </div>
           )}
-          {isPending && streamingContent === null && <TypingIndicator />}
+          {isPending && streamingContent === null && !streamDoneRef.current && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
       </ScrollArea>
