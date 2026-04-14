@@ -3,11 +3,16 @@ using Npgsql;
 using Pgvector;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Models;
+using SentientArchitect.Data;
+using SentientArchitect.Domain.Constants;
 using SentientArchitect.Domain.Entities;
 
 namespace SentientArchitect.Data.Postgres.Repositories;
 
-public class PgVectorStore(IApplicationDbContext context) : IVectorStore
+// PgVectorStore lives in Data.Postgres and injects ApplicationContext directly so it can
+// use raw SQL (Database.SqlQueryRaw) for vector similarity without leaking EF internals
+// into the Application-layer IApplicationDbContext interface.
+public class PgVectorStore(ApplicationContext context) : IVectorStore
 {
     public async Task StoreEmbeddingAsync(
         Guid knowledgeItemId,
@@ -31,7 +36,7 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
         bool includeAllScopes = false,
         CancellationToken ct = default)
     {
-        var includeAllTenants = includeAllScopes || tenantId == Guid.Empty;
+        var includeAllTenants = includeAllScopes || tenantId == TenantIds.Shared;
 
         // The Embedding property is stored as float[] with a ValueConverter → Pgvector.Vector.
         // EF Core's LINQ translator works on the CLR type (float[]), so the Pgvector EF extension

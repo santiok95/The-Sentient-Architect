@@ -1,12 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using SentientArchitect.Domain.Entities;
 
 namespace SentientArchitect.Application.Common.Interfaces;
 
 public interface IApplicationDbContext
 {
-    DatabaseFacade Database { get; }
     DbSet<KnowledgeItem> KnowledgeItems { get; }
     DbSet<KnowledgeEmbedding> KnowledgeEmbeddings { get; }
     DbSet<Tag> Tags { get; }

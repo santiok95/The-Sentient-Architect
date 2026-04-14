@@ -26,7 +26,7 @@ public class User : BaseEntity
 
     public void UpdateDisplayName(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (string.IsNullOrWhiteSpace(name)) return;
         DisplayName = name;
     }
 }

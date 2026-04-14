@@ -31,16 +31,18 @@ public class SearchKnowledgeUseCase(
             request.IncludeAllScopes,
             ct);
 
-        // 4 & 5. Hydrate with KnowledgeItem metadata and map to response records
-        var results = new List<KnowledgeSearchResult>(vectorResults.Count);
+        // 4. Batch-fetch all KnowledgeItems in a single query (avoid N+1)
+        var ids = vectorResults.Select(v => v.KnowledgeItemId).ToList();
+        var itemsById = await db.KnowledgeItems
+            .AsNoTracking()
+            .Where(k => ids.Contains(k.Id))
+            .ToDictionaryAsync(k => k.Id, ct);
 
+        // 5. Map to response records preserving the vector similarity ranking
+        var results = new List<KnowledgeSearchResult>(vectorResults.Count);
         foreach (var vectorResult in vectorResults)
         {
-            var item = await db.KnowledgeItems
-                .AsNoTracking()
-                .FirstOrDefaultAsync(k => k.Id == vectorResult.KnowledgeItemId, ct);
-
-            if (item is null)
+            if (!itemsById.TryGetValue(vectorResult.KnowledgeItemId, out var item))
                 continue;
 
             results.Add(new KnowledgeSearchResult(

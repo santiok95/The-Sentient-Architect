@@ -31,6 +31,22 @@ public class KnowledgeEndpoints : IEndpointModule
             var tenantId = userAccessor.GetCurrentTenantId();
             var isAdmin  = httpContext.User.IsInRole("Admin");
 
+            // Reject payloads that would exhaust embedding resources or exceed DB field limits
+            if (string.IsNullOrWhiteSpace(body.Title) || body.Title.Length > 500)
+            {
+                return Results.ValidationProblem(
+                    errors: new Dictionary<string, string[]> { ["title"] = ["Title is required and must be at most 500 characters."] },
+                    title: "Ha ocurrido uno o más errores de validación/negocio.");
+            }
+
+            if ((body.Content?.Length ?? 0) > 50_000)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status413PayloadTooLarge,
+                    title: "Payload demasiado grande.",
+                    detail: "El contenido no puede superar los 50.000 caracteres.");
+            }
+
             if (!TryParseKnowledgeType(body.Type, out var knowledgeType))
             {
                 return Results.ValidationProblem(
@@ -82,11 +98,14 @@ public class KnowledgeEndpoints : IEndpointModule
             var tenantId = userAccessor.GetCurrentTenantId();
             var includeAllScopes = httpContext.User.IsInRole("Admin");
 
+            // Clamp maxResults to a safe range — prevents resource exhaustion from large queries
+            var clampedMaxResults = Math.Clamp(maxResults, 1, 100);
+
             var request = new SearchKnowledgeRequest(
                 userId,
                 tenantId,
                 q,
-                maxResults,
+                clampedMaxResults,
                 includeShared,
                 minimumScore,
                 includeAllScopes);

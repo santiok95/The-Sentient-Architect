@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Domain.Constants;
 
 namespace SentientArchitect.Infrastructure.Agents.Knowledge;
 
@@ -49,7 +50,7 @@ public sealed class SearchPlugin(
             // Fetch items for current scope or shared/empty tenant
             var items = await db.KnowledgeItems
                 .AsNoTracking()
-                .Where(k => k.UserId == userId || k.TenantId == tenantId || k.TenantId == Guid.Empty)
+                .Where(k => k.UserId == userId || k.TenantId == tenantId || k.TenantId == TenantIds.Shared)
                 .ToListAsync(cancellationToken);
 
             var matches = items

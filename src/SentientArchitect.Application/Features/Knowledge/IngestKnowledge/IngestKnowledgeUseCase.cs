@@ -47,36 +47,51 @@ public class IngestKnowledgeUseCase(
             // 4. Chunk the content
             var chunks = ChunkText(request.OriginalContent);
 
-            // 5 & 6. Generate embeddings and store each chunk
+            // 5 & 6. Generate embeddings and store each chunk (vector store manages its own persistence)
             for (var i = 0; i < chunks.Count; i++)
             {
                 var embedding = await embeddingService.GenerateEmbeddingAsync(chunks[i], ct);
                 await vectorStore.StoreEmbeddingAsync(item.Id, i, chunks[i], embedding, ct);
             }
 
-            // 7. Handle tags
+            // 7. Handle tags — resolve/create all tags, then add join records; single round-trip at end
             if (request.Tags is { Count: > 0 })
             {
-                foreach (var tagName in request.Tags)
+                // Collect normalized names (deduplicated)
+                var normalizedNames = request.Tags
+                    .Where(t => !string.IsNullOrWhiteSpace(t))
+                    .Select(t => t.Trim())
+                    .Distinct()
+                    .ToList();
+
+                if (normalizedNames.Count > 0)
                 {
-                    if (string.IsNullOrWhiteSpace(tagName))
-                        continue;
+                    // Fetch all existing tags in one query
+                    var existingTags = await db.Tags
+                        .Where(t => normalizedNames.Contains(t.Name) && t.Category == TagCategory.Custom)
+                        .ToListAsync(ct);
 
-                    var normalizedName = tagName.Trim();
+                    var existingNames = existingTags.Select(t => t.Name).ToHashSet();
 
-                    var tag = await db.Tags
-                        .FirstOrDefaultAsync(t => t.Name == normalizedName && t.Category == TagCategory.Custom, ct);
+                    // Create missing tags
+                    var newTags = normalizedNames
+                        .Where(n => !existingNames.Contains(n))
+                        .Select(n => new Tag(n, TagCategory.Custom))
+                        .ToList();
 
-                    if (tag is null)
-                    {
-                        tag = new Tag(normalizedName, TagCategory.Custom);
-                        db.Tags.Add(tag);
+                    if (newTags.Count > 0)
+                        db.Tags.AddRange(newTags);
+
+                    // Save new tags first so they get their IDs
+                    if (newTags.Count > 0)
                         await db.SaveChangesAsync(ct);
-                    }
 
-                    var kitag = new KnowledgeItemTag { KnowledgeItemId = item.Id, TagId = tag.Id };
-                    db.KnowledgeItemTags.Add(kitag);
-                    await db.SaveChangesAsync(ct);
+                    // Add all KnowledgeItemTag join records
+                    foreach (var tag in existingTags.Concat(newTags))
+                    {
+                        var kitag = new KnowledgeItemTag { KnowledgeItemId = item.Id, TagId = tag.Id };
+                        db.KnowledgeItemTags.Add(kitag);
+                    }
                 }
             }
 
@@ -87,10 +102,7 @@ public class IngestKnowledgeUseCase(
 
             item.MarkAsCompleted(summary);
 
-            // 9. Persist final state
-            await db.SaveChangesAsync(ct);
-
-            // 10. Auto-create publish request for non-admin users
+            // 9. Auto-create publish request for non-admin users
             if (!request.IsUserAdmin)
             {
                 var publishRequest = new ContentPublishRequest(
@@ -98,10 +110,11 @@ public class IngestKnowledgeUseCase(
                     request.UserId,
                     requestReason: null);
                 db.ContentPublishRequests.Add(publishRequest);
-                await db.SaveChangesAsync(ct);
             }
 
-            // 11. Return success
+            // 10. Single SaveChanges — tags (join records), completed status, publish request all at once
+            await db.SaveChangesAsync(ct);
+
             return Result<IngestKnowledgeResponse>.SuccessWith(
                 new IngestKnowledgeResponse(item.Id, item.ProcessingStatus, chunks.Count));
         }

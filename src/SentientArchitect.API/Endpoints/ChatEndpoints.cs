@@ -25,6 +25,17 @@ public class ChatEndpoints : IEndpointModule
             [FromServices] IHubContext<ConversationHub> hubContext,
             CancellationToken ct) =>
         {
+            // Guard against runaway LLM token consumption
+            if (string.IsNullOrWhiteSpace(body.Message) || body.Message.Length > 5_000)
+            {
+                return Results.ValidationProblem(
+                    errors: new Dictionary<string, string[]>
+                    {
+                        ["message"] = ["Message is required and must be at most 5,000 characters."]
+                    },
+                    title: "Ha ocurrido uno o más errores de validación/negocio.");
+            }
+
             var userId = userAccessor.GetCurrentUserId();
             var groupName = conversationId.ToString();
             var streamedAnyToken = false;

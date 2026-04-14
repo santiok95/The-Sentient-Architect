@@ -11,8 +11,9 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
         GetConversationDetailRequest request,
         CancellationToken ct = default)
     {
+        // Load only the last 200 messages; full history is unbounded and causes OOM on long conversations
         var conversation = await db.Conversations
-            .Include(c => c.Messages)
+            .Include(c => c.Messages.OrderBy(m => m.CreatedAt).Take(200))
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId, ct);
 
@@ -53,7 +54,7 @@ public class GetConversationDetailUseCase(IApplicationDbContext db)
             conversation.AgentType.ToString(),
             conversation.ContextMode.ToString(),
             conversation.Status.ToString(),
-            conversation.Messages.Count,
+            messages.Count,  // count of loaded messages (capped at 200)
             conversation.CreatedAt,
             conversation.UpdatedAt,
             messages,

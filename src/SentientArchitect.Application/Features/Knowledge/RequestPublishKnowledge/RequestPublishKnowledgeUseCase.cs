@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Domain.Constants;
 using SentientArchitect.Domain.Entities;
 using SentientArchitect.Domain.Enums;
 
@@ -38,7 +39,7 @@ public class RequestPublishKnowledgeUseCase(IApplicationDbContext db)
         if (request.RequesterIsAdmin)
         {
             publishRequest.Approve(request.UserId);
-            knowledgeItem.PublishToShared(Guid.Empty);
+            knowledgeItem.PublishToShared(TenantIds.Shared);
         }
 
         db.ContentPublishRequests.Add(publishRequest);

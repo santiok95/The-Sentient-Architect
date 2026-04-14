@@ -73,12 +73,21 @@ public sealed class ChatExecutionService(
               explicitly asks for alternatives.
         """;
 
+    // Maximum time to wait for a single LLM response (streaming). Prevents thread-pool
+    // exhaustion when Anthropic / OpenAI is unresponsive.
+    private static readonly TimeSpan LlmTimeout = TimeSpan.FromMinutes(5);
+
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
         ChatExecutionRequest request,
         IReadOnlyList<ConversationMessage> history,
         Func<string, CancellationToken, Task>? onToken = null,
         CancellationToken ct = default)
     {
+        // Combine the caller's token with a hard timeout so a hung LLM call doesn't hold the thread.
+        using var timeoutCts  = new CancellationTokenSource(LlmTimeout);
+        using var linkedCts   = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+        var timedCt           = linkedCts.Token;
+
         try
         {
             var isConsultant = request.AgentType == Domain.Enums.AgentType.Consultant;
@@ -93,13 +102,19 @@ public sealed class ChatExecutionService(
             if (!isConsultant)
             {
                 return await RunDeterministicKnowledgeFlowAsync(
-                    request, chatService, chatHistory, onToken, ct);
+                    request, chatService, chatHistory, onToken, timedCt);
             }
 
             // Keep consultant stable while Anthropic tool-call protocol through the bridge
             // is still intermittently failing with tool_use/tool_result mismatches.
             return await RunDeterministicConsultantFlowAsync(
-                request, chatService, chatHistory, onToken, ct);
+                request, chatService, chatHistory, onToken, timedCt);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            return Result<ChatExecutionResponse>.Failure(
+                ["La solicitud al modelo de IA superó el tiempo máximo (5 min). Intentá de nuevo."],
+                ErrorType.Failure);
         }
         catch (Exception ex)
         {

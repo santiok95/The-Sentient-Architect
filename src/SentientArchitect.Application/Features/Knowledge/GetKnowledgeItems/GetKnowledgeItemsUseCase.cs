@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Domain.Constants;
 using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Application.Features.Knowledge.GetKnowledgeItems;
@@ -36,11 +37,12 @@ public class GetKnowledgeItemsUseCase(IApplicationDbContext db)
 {
     public async Task<Result<PagedKnowledgeItemsDto>> ExecuteAsync(GetKnowledgeItemsRequest request, CancellationToken ct = default)
     {
+        // Note: Embeddings are NOT included here — we use a subquery for HasEmbeddings to avoid
+        // loading 1536-float vectors per chunk (~6 KB each) just to check existence.
         var query = db.KnowledgeItems
-            .Where(k => k.UserId == request.UserId || k.TenantId == Guid.Empty)
+            .Where(k => k.UserId == request.UserId || k.TenantId == TenantIds.Shared)
             .Include(k => k.KnowledgeItemTags)
                 .ThenInclude(t => t.Tag)
-            .Include(k => k.Embeddings)
             .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -67,13 +69,22 @@ public class GetKnowledgeItemsUseCase(IApplicationDbContext db)
             .Take(pageSize)
             .ToListAsync(ct);
 
+        // Batch-check which items have embeddings in a single query (avoids N+1 with heavy vector data)
+        var itemIds = items.Select(k => k.Id).ToList();
+        var itemsWithEmbeddings = await db.KnowledgeEmbeddings
+            .AsNoTracking()
+            .Where(e => itemIds.Contains(e.KnowledgeItemId))
+            .Select(e => e.KnowledgeItemId)
+            .Distinct()
+            .ToHashSetAsync(ct);
+
         var dtos = items.Select(k => new KnowledgeItemDto(
             Id: k.Id,
             Title: k.Title,
             Type: k.Type.ToString(),
-            Scope: k.TenantId == Guid.Empty ? "Shared" : "Personal",
+            Scope: k.TenantId == TenantIds.Shared ? "Shared" : "Personal",
             ProcessingStatus: k.ProcessingStatus.ToString(),
-            HasEmbeddings: k.Embeddings.Any(),
+            HasEmbeddings: itemsWithEmbeddings.Contains(k.Id),
             SourceUrl: k.SourceUrl,
             Tags: k.KnowledgeItemTags.Select(t => t.Tag!.Name).ToList(),
             CreatedAt: k.CreatedAt,

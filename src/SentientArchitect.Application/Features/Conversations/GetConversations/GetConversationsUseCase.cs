@@ -10,23 +10,33 @@ public class GetConversationsUseCase(IApplicationDbContext db)
         GetConversationsRequest request,
         CancellationToken ct = default)
     {
-        var conversations = await db.Conversations
+        // Project scalar values + SQL COUNT into an anonymous type, then transform in memory.
+        // Two-step avoids translating .ToString() on enum conversions server-side (not supported by EF).
+        var rows = await db.Conversations
             .Where(c => c.UserId == request.UserId)
-            .Include(c => c.Messages)
             .AsNoTracking()
-            .ToListAsync(ct);
-
-        var summaries = conversations
-            .Select(c => new ConversationSummary(
+            .Select(c => new
+            {
                 c.Id,
                 c.Title,
-                c.AgentType.ToString(),
-                c.ContextMode.ToString(),
-                c.Status.ToString(),
-                c.Messages.Count,
+                c.AgentType,
+                c.ContextMode,
+                c.Status,
+                MessageCount = c.Messages.Count(),  // translates to SQL COUNT — no message rows loaded
                 c.CreatedAt,
-                c.UpdatedAt))
-            .ToList();
+                c.UpdatedAt
+            })
+            .ToListAsync(ct);
+
+        var summaries = rows.Select(c => new ConversationSummary(
+            c.Id,
+            c.Title,
+            c.AgentType.ToString(),
+            c.ContextMode.ToString(),
+            c.Status.ToString(),
+            c.MessageCount,
+            c.CreatedAt,
+            c.UpdatedAt)).ToList();
 
         return Result<GetConversationsResponse>.SuccessWith(new GetConversationsResponse(summaries, summaries.Count));
     }

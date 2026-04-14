@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Domain.Constants;
 
 namespace SentientArchitect.Application.Features.Admin.ReviewPublishRequest;
 
@@ -20,7 +21,7 @@ public class ReviewPublishRequestUseCase(IApplicationDbContext db)
         if (request.Action.Equals("Approve", StringComparison.OrdinalIgnoreCase))
         {
             publishRequest.Approve(request.ReviewerUserId);
-            publishRequest.KnowledgeItem!.PublishToShared(Guid.Empty);
+            publishRequest.KnowledgeItem!.PublishToShared(TenantIds.Shared);
         }
         else if (request.Action.Equals("Reject", StringComparison.OrdinalIgnoreCase))
         {

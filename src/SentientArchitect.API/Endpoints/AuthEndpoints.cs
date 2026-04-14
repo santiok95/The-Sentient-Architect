@@ -15,7 +15,8 @@ public class AuthEndpoints : IEndpointModule
     public void Map(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/auth")
-            .WithTags("Auth");
+            .WithTags("Auth")
+            .RequireRateLimiting("auth");  // 10 req/min per IP — brute-force protection
 
         group.MapPost("/register", async (
             [FromBody] RegisterRequest body,
