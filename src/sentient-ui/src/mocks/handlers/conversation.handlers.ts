@@ -1,20 +1,46 @@
 import { http, HttpResponse } from 'msw'
+import { MOCK_REPO_IDS } from './repository.handlers'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
 
-const MOCK_CONVERSATIONS = [
+// Mock repo for RepoBound conversations — UUID matches repository.handlers
+const MOCK_REPO = {
+  id: MOCK_REPO_IDS.aspire,
+  url: 'https://github.com/dotnet/aspire',
+  branch: 'main',
+}
+
+interface MockConversation {
+  id: string
+  title: string
+  agentType: 'Knowledge' | 'Consultant'
+  mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
+  status: string
+  lastMessageAt: string
+  messageCount: number
+  activeRepositoryId?: string
+  activeRepositoryUrl?: string
+  activeRepositoryBranch?: string
+}
+
+let MOCK_CONVERSATIONS: MockConversation[] = [
   {
     id: 'conv-001',
     title: 'Clean Architecture + Aspire integration',
-    objective: 'Integrar Aspire con Clean Architecture sin romper separación de capas.',
+    agentType: 'Consultant',
+    mode: 'RepoBound',
     status: 'Active',
     lastMessageAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     messageCount: 6,
+    activeRepositoryId: MOCK_REPO.id,
+    activeRepositoryUrl: MOCK_REPO.url,
+    activeRepositoryBranch: MOCK_REPO.branch,
   },
   {
     id: 'conv-002',
     title: 'CQRS implementation approach',
-    objective: '¿Usar MediatR o implementar CQRS manualmente?',
+    agentType: 'Consultant',
+    mode: 'Generic',
     status: 'Active',
     lastMessageAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
     messageCount: 4,
@@ -22,8 +48,9 @@ const MOCK_CONVERSATIONS = [
   {
     id: 'conv-003',
     title: 'pgvector schema design',
-    objective: 'Optimizar el schema de embeddings para búsquedas multi-tenant.',
-    status: 'Completed',
+    agentType: 'Knowledge',
+    mode: 'Auto',
+    status: 'Archived',
     lastMessageAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     messageCount: 12,
   },
@@ -61,34 +88,77 @@ export const conversationHandlers = [
     return HttpResponse.json({ items, totalCount: items.length, page: 1, pageSize: 20 })
   }),
 
-  http.post(`${BASE_URL}/api/v1/conversations`, async () => {
-    const newConv = {
+  http.post(`${BASE_URL}/api/v1/conversations`, async ({ request }) => {
+    const body = await request.json() as {
+      title?: string
+      agentType?: 'Knowledge' | 'Consultant'
+      activeRepositoryId?: string
+    }
+
+    const agentType = body.agentType ?? 'Knowledge'
+    const isRepoBound = agentType === 'Consultant' && !!body.activeRepositoryId
+
+    const newConv: MockConversation = {
       id: `conv-${Date.now()}`,
-      title: 'New conversation',
-      objective: null,
+      title: body.title ?? 'Nueva consulta',
+      agentType,
+      mode: isRepoBound ? 'RepoBound' : 'Auto',
       status: 'Active',
       lastMessageAt: new Date().toISOString(),
       messageCount: 0,
+      ...(isRepoBound && {
+        activeRepositoryId: body.activeRepositoryId,
+        activeRepositoryUrl: MOCK_REPO.url,
+        activeRepositoryBranch: MOCK_REPO.branch,
+      }),
     }
-    return HttpResponse.json(newConv, { status: 201 })
+
+    MOCK_CONVERSATIONS = [newConv, ...MOCK_CONVERSATIONS]
+    return HttpResponse.json({ conversationId: newConv.id, title: newConv.title }, { status: 201 })
   }),
 
   http.get(`${BASE_URL}/api/v1/conversations/:id`, ({ params }) => {
     const conv = MOCK_CONVERSATIONS.find((c) => c.id === params.id)
     if (!conv) return new HttpResponse(null, { status: 404 })
     return HttpResponse.json({
-      ...conv,
+      id: conv.id,
+      title: conv.title,
+      agentType: conv.agentType,
+      mode: conv.mode,
+      status: conv.status,
+      messageCount: conv.messageCount,
+      createdAt: conv.lastMessageAt,
+      updatedAt: conv.lastMessageAt,
       recentMessages: MOCK_MESSAGES_BY_CONV[params.id as string] ?? [],
-      latestSummary: null,
+      activeRepositoryId: conv.activeRepositoryId ?? null,
+      activeRepositoryUrl: conv.activeRepositoryUrl ?? null,
+      activeRepositoryBranch: conv.activeRepositoryBranch ?? null,
     })
   }),
 
-  http.post(`${BASE_URL}/api/v1/conversations/:id/messages`, async ({ request }) => {
-    const body = await request.json() as { content?: string }
+  http.post(`${BASE_URL}/api/v1/conversations/:id/messages`, async () => {
     return HttpResponse.json(
       { messageId: `msg-${Date.now()}`, status: 'Processing', message: 'Response streaming via ConversationHub' },
       { status: 202 },
     )
+  }),
+
+  http.post(`${BASE_URL}/api/v1/conversations/:id/chat`, async () => {
+    return HttpResponse.json(
+      { messageId: `msg-${Date.now()}`, status: 'Processing', message: 'Response streaming via ConversationHub' },
+      { status: 202 },
+    )
+  }),
+
+  http.patch(`${BASE_URL}/api/v1/conversations/:id/archive`, ({ params }) => {
+    const conv = MOCK_CONVERSATIONS.find((c) => c.id === params.id)
+    if (conv) conv.status = 'Archived'
+    return HttpResponse.json({ archived: true })
+  }),
+
+  http.delete(`${BASE_URL}/api/v1/conversations/:id`, ({ params }) => {
+    MOCK_CONVERSATIONS = MOCK_CONVERSATIONS.filter((c) => c.id !== params.id)
+    return new HttpResponse(null, { status: 204 })
   }),
 
   http.patch(`${BASE_URL}/api/v1/conversations/:id`, async ({ params, request }) => {

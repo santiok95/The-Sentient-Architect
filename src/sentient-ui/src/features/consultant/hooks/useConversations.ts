@@ -26,6 +26,9 @@ export interface ConversationMessage {
 
 export interface ConversationDetail extends ConversationSummary {
   recentMessages: ConversationMessage[]
+  activeRepositoryId?: string
+  activeRepositoryUrl?: string
+  activeRepositoryBranch?: string
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────

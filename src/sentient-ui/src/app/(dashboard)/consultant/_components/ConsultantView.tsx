@@ -10,6 +10,15 @@ import { createConversationAction } from '@/features/consultant/actions'
 import { CONVERSATION_KEYS } from '@/features/consultant/hooks/useConversations'
 import type { AgentType } from '@/lib/schemas'
 
+function repoShortName(gitUrl: string) {
+  try {
+    const url = new URL(gitUrl)
+    return url.pathname.replace(/^\//, '').replace(/\.git$/, '')
+  } catch {
+    return gitUrl
+  }
+}
+
 export function ConsultantView() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [chatKey, setChatKey] = useState(0)
@@ -28,11 +37,12 @@ export function ConsultantView() {
     onError: ({ error }) => toast.error(error.serverError ?? 'Error al crear conversación'),
   })
 
-  function handleCreateConversation(agentType: AgentType) {
-    // Clear the active conversation immediately so the chat shows the empty/loading state
-    // while the request is in flight. onSuccess will set the real id when it arrives.
+  function handleCreateConversation(agentType: AgentType, activeRepositoryId?: string, repoGitUrl?: string) {
     selectConversation(null)
-    createConv({ agentType })
+    const title = agentType === 'Consultant' && repoGitUrl
+      ? `Consulta — ${repoShortName(repoGitUrl)}`
+      : undefined  // backend default
+    createConv({ agentType, activeRepositoryId, title })
   }
 
   return (

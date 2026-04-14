@@ -20,6 +20,7 @@ export const createConversationAction = authedActionClient
       body: JSON.stringify({
         title: parsedInput.title ?? 'Nueva consulta',
         agentType: parsedInput.agentType ?? 'Knowledge',
+        ...(parsedInput.activeRepositoryId && { activeRepositoryId: parsedInput.activeRepositoryId }),
       }),
     })
     if (!res.ok) {

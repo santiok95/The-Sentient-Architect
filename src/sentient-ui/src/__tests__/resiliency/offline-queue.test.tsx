@@ -35,7 +35,7 @@ describe('offline queue store actions', () => {
     act(() => {
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'Hola', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'Hola', contextMode: 'Auto' },
       })
     })
 
@@ -54,11 +54,11 @@ describe('offline queue store actions', () => {
     act(() => {
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'First', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'First', contextMode: 'Auto' },
       })
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'Second', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'Second', contextMode: 'Auto' },
       })
     })
 
@@ -74,11 +74,11 @@ describe('offline queue store actions', () => {
     act(() => {
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'Keep', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'Keep', contextMode: 'Auto' },
       })
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'Remove', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'Remove', contextMode: 'Auto' },
       })
     })
 
@@ -98,11 +98,11 @@ describe('offline queue store actions', () => {
     act(() => {
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'A', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'A', contextMode: 'Auto' },
       })
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'B', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'B', contextMode: 'Auto' },
       })
       result.current.clearOfflineQueue()
     })
@@ -116,7 +116,7 @@ describe('offline queue store actions', () => {
     act(() => {
       result.current.enqueueOfflineAction({
         type: 'send_message',
-        payload: { conversationId: 'conv-001', content: 'Retry me', mode: 'Auto' },
+        payload: { conversationId: 'conv-001', content: 'Retry me', contextMode: 'Auto' },
       })
     })
 
@@ -137,7 +137,7 @@ describe('offline queue store actions', () => {
       for (let i = 0; i < 5; i++) {
         result.current.enqueueOfflineAction({
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: `msg-${i}`, mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: `msg-${i}`, contextMode: 'Auto' },
         })
       }
     })
@@ -161,7 +161,7 @@ describe('useOfflineQueue hook', () => {
         {
           id: 'oq-test-1',
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: 'Queued', mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: 'Queued', contextMode: 'Auto' },
           queuedAt: new Date().toISOString(),
           retryCount: 0,
         },
@@ -184,14 +184,14 @@ describe('useOfflineQueue hook', () => {
         {
           id: 'oq-1',
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: 'msg-1', mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: 'msg-1', contextMode: 'Auto' },
           queuedAt: new Date().toISOString(),
           retryCount: 0,
         },
         {
           id: 'oq-2',
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: 'msg-2', mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: 'msg-2', contextMode: 'Auto' },
           queuedAt: new Date().toISOString(),
           retryCount: 0,
         },
@@ -211,12 +211,12 @@ describe('useOfflineQueue hook', () => {
     expect(execute).toHaveBeenCalledWith({
       conversationId: 'conv-001',
       content: 'msg-1',
-      mode: 'Auto',
+      contextMode: 'Auto',
     })
     expect(execute).toHaveBeenCalledWith({
       conversationId: 'conv-001',
       content: 'msg-2',
-      mode: 'Auto',
+      contextMode: 'Auto',
     })
   })
 
@@ -229,7 +229,7 @@ describe('useOfflineQueue hook', () => {
         {
           id: 'oq-flush-1',
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: 'flush me', mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: 'flush me', contextMode: 'Auto' },
           queuedAt: new Date().toISOString(),
           retryCount: 0,
         },
@@ -257,7 +257,7 @@ describe('useOfflineQueue hook', () => {
         {
           id: 'oq-noflush',
           type: 'send_message',
-          payload: { conversationId: 'conv-001', content: 'should stay', mode: 'Auto' },
+          payload: { conversationId: 'conv-001', content: 'should stay', contextMode: 'Auto' },
           queuedAt: new Date().toISOString(),
           retryCount: 0,
         },

@@ -6,19 +6,19 @@ describe('createConversationSchema', () => {
     const result = createConversationSchema.safeParse({})
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode).toBe('Auto')
+      expect(result.data.agentType).toBe('Knowledge')
     }
   })
 
-  it('accepts title with explicit mode', () => {
+  it('accepts title with explicit agentType', () => {
     const result = createConversationSchema.safeParse({
       title: 'Clean Architecture con .NET 9',
-      mode: 'StackBound',
+      agentType: 'Consultant',
     })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.title).toBe('Clean Architecture con .NET 9')
-      expect(result.data.mode).toBe('StackBound')
+      expect(result.data.agentType).toBe('Consultant')
     }
   })
 
@@ -29,16 +29,32 @@ describe('createConversationSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('accepts all valid modes', () => {
-    const modes = ['Auto', 'RepoBound', 'StackBound', 'Generic'] as const
-    for (const mode of modes) {
-      const result = createConversationSchema.safeParse({ mode })
-      expect(result.success, `mode ${mode} should be valid`).toBe(true)
+  it('accepts both valid agentTypes', () => {
+    const types = ['Knowledge', 'Consultant'] as const
+    for (const agentType of types) {
+      const result = createConversationSchema.safeParse({ agentType })
+      expect(result.success, `agentType ${agentType} should be valid`).toBe(true)
     }
   })
 
-  it('rejects invalid mode', () => {
-    const result = createConversationSchema.safeParse({ mode: 'CustomMode' })
+  it('rejects invalid agentType', () => {
+    const result = createConversationSchema.safeParse({ agentType: 'Guardian' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts optional activeRepositoryId as UUID', () => {
+    const result = createConversationSchema.safeParse({
+      agentType: 'Consultant',
+      activeRepositoryId: '550e8400-e29b-41d4-a716-446655440000',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects non-UUID activeRepositoryId', () => {
+    const result = createConversationSchema.safeParse({
+      agentType: 'Consultant',
+      activeRepositoryId: 'repo-001',
+    })
     expect(result.success).toBe(false)
   })
 })
@@ -68,26 +84,26 @@ describe('sendMessageSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('accepts valid message with default mode', () => {
+  it('accepts valid message without contextMode', () => {
     const result = sendMessageSchema.safeParse({
       conversationId: '550e8400-e29b-41d4-a716-446655440000',
       content: 'How do I implement CQRS in .NET 9?',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode).toBe('Auto')
+      expect(result.data.contextMode).toBeUndefined()
     }
   })
 
-  it('accepts valid message with explicit mode', () => {
+  it('accepts valid message with explicit contextMode', () => {
     const result = sendMessageSchema.safeParse({
       conversationId: '550e8400-e29b-41d4-a716-446655440000',
       content: 'Analyze the repository architecture.',
-      mode: 'RepoBound',
+      contextMode: 'RepoBound',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode).toBe('RepoBound')
+      expect(result.data.contextMode).toBe('RepoBound')
     }
   })
 })

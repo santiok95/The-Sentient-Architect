@@ -112,14 +112,14 @@ describe('Consultant schemas', () => {
     expect(result.success).toBe(false)
   })
 
-  it('sendMessageSchema: defaults mode to Auto', () => {
+  it('sendMessageSchema: contextMode is optional', () => {
     const result = sendMessageSchema.safeParse({
       conversationId: '550e8400-e29b-41d4-a716-446655440000',
       content: 'Tell me about clean architecture',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode).toBe('Auto')
+      expect(result.data.contextMode).toBeUndefined()
     }
   })
 })

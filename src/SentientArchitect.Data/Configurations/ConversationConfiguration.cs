@@ -19,6 +19,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.Property(c => c.Status).IsRequired().HasConversion<string>().HasMaxLength(50);
         builder.Property(c => c.ContextMode).IsRequired().HasConversion<string>().HasMaxLength(50);
         builder.Property(c => c.ActiveRepositoryId);
+        builder.Property(c => c.ActiveRepositoryBranch).HasMaxLength(250);
         builder.Property(c => c.PreferredStack).HasMaxLength(120);
         builder.Property(c => c.TokenCount).IsRequired();
         builder.Property(c => c.CreatedAt).IsRequired();

@@ -18,4 +18,7 @@ public record GetConversationDetailResponse(
     int MessageCount,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    List<ConversationMessageDto> RecentMessages);
+    List<ConversationMessageDto> RecentMessages,
+    Guid? ActiveRepositoryId = null,
+    string? ActiveRepositoryUrl = null,
+    string? ActiveRepositoryBranch = null);

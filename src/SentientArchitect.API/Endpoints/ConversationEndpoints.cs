@@ -28,7 +28,12 @@ public class ConversationEndpoints : IEndpointModule
             var userId   = userAccessor.GetCurrentUserId();
             var tenantId = userAccessor.GetCurrentTenantId();
 
-            var request = new CreateConversationRequest(userId, tenantId, body.Title ?? "New Conversation", body.AgentType);
+            var request = new CreateConversationRequest(
+                userId,
+                tenantId,
+                body.Title ?? "New Conversation",
+                body.AgentType,
+                body.ActiveRepositoryId);
             var result  = await useCase.ExecuteAsync(request, ct);
 
             return result.ToCreatedResult($"/api/v1/conversations/{result.Data?.ConversationId}");
@@ -50,10 +55,12 @@ public class ConversationEndpoints : IEndpointModule
 
         group.MapGet("/{id:guid}", async (
             [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
             [FromServices] GetConversationDetailUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new GetConversationDetailRequest(id), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetConversationDetailRequest(id, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("GetConversationDetail")
@@ -74,15 +81,20 @@ public class ConversationEndpoints : IEndpointModule
 
         group.MapDelete("/{id:guid}", async (
             [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
             [FromServices] DeleteConversationUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new DeleteConversationRequest(id), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new DeleteConversationRequest(id, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("DeleteConversation")
         .WithOpenApi();
     }
 
-    private record CreateConversationHttpRequest(string? Title = null, AgentType AgentType = AgentType.Knowledge);
+    private record CreateConversationHttpRequest(
+        string? Title = null,
+        AgentType AgentType = AgentType.Knowledge,
+        Guid? ActiveRepositoryId = null);
 }

@@ -4,7 +4,10 @@ import { useRef, useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { MessageSquare, Plus, Archive, Clock, Layers, Loader2, ChevronDown, Bot, Brain, Trash2 } from 'lucide-react'
+import {
+  MessageSquare, Plus, Archive, Clock, Layers, Loader2,
+  ChevronDown, Bot, Brain, Trash2, GitBranch, ArrowLeft, Check,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,6 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useConversations, CONVERSATION_KEYS, type ConversationSummary } from '../hooks/useConversations'
+import { useRepositories, type RepositorySummary } from '@/features/guardian/hooks/useRepositories'
 import { archiveConversationAction, deleteConversationAction } from '../actions'
 import type { AgentType } from '@/lib/schemas'
 
@@ -27,10 +31,20 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
   Archived: <Archive className="h-3 w-3 text-muted-foreground" />,
 }
 
+function repoShortName(gitUrl: string) {
+  // https://github.com/owner/repo → owner/repo
+  try {
+    const url = new URL(gitUrl)
+    return url.pathname.replace(/^\//, '').replace(/\.git$/, '')
+  } catch {
+    return gitUrl
+  }
+}
+
 interface Props {
   activeId: string | null
   onSelect: (id: string) => void
-  onCreateConversation: (agentType: AgentType) => void
+  onCreateConversation: (agentType: AgentType, activeRepositoryId?: string, repoGitUrl?: string) => void
   isCreating: boolean
   onDeselect: () => void
 }
@@ -106,12 +120,97 @@ function ConversationItem({
   )
 }
 
+function RepoPicker({
+  repos,
+  selectedId,
+  onSelect,
+  onConfirm,
+  onBack,
+  isCreating,
+}: {
+  repos: RepositorySummary[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onConfirm: () => void
+  onBack: () => void
+  isCreating: boolean
+}) {
+  const completed = repos.filter((r) => r.processingStatus === 'Completed')
+
+  return (
+    <div className="flex flex-col gap-2 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onBack}
+          className="flex items-center justify-center rounded h-6 w-6 hover:bg-muted transition-colors"
+          title="Volver"
+        >
+          <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Seleccioná un repositorio
+        </p>
+      </div>
+
+      {completed.length === 0 ? (
+        <p className="text-xs text-muted-foreground px-1 py-2">
+          No hay repositorios analizados todavía. Subí uno en Guardian primero.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+          {completed.map((repo) => (
+            <button
+              key={repo.id}
+              onClick={() => onSelect(repo.id)}
+              className={cn(
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors w-full',
+                selectedId === repo.id
+                  ? 'bg-primary/15 border border-primary/30 text-foreground'
+                  : 'hover:bg-muted/60 text-foreground/80',
+              )}
+            >
+              <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate font-mono">{repoShortName(repo.gitUrl)}</span>
+              {selectedId === repo.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-1">
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 h-7 text-xs"
+          onClick={onBack}
+          disabled={isCreating}
+        >
+          Cancelar
+        </Button>
+        <Button
+          size="sm"
+          className="flex-1 h-7 text-xs"
+          onClick={onConfirm}
+          disabled={isCreating || !selectedId}
+        >
+          {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Empezar'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export function ConversationList({ activeId, onSelect, onCreateConversation, isCreating, onDeselect }: Props) {
   const queryClient = useQueryClient()
   const { data, isLoading } = useConversations()
+  const { data: reposData } = useRepositories()
   const [archivingId, setArchivingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const deletingIdRef = useRef<string | null>(null)
+
+  // Repo picker state
+  const [showRepoPicker, setShowRepoPicker] = useState(false)
+  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
 
   const { execute: archiveConv } = useAction(archiveConversationAction, {
     onSuccess: () => {
@@ -138,43 +237,72 @@ export function ConversationList({ activeId, onSelect, onCreateConversation, isC
     },
   })
 
+  function handleConsultantClick() {
+    setSelectedRepoId(null)
+    setShowRepoPicker(true)
+  }
+
+  function handleRepoConfirm() {
+    if (!selectedRepoId) return
+    const repo = repos.find((r) => r.id === selectedRepoId)
+    setShowRepoPicker(false)
+    onCreateConversation('Consultant', selectedRepoId, repo?.gitUrl)
+  }
+
+  function handleRepoBack() {
+    setShowRepoPicker(false)
+    setSelectedRepoId(null)
+  }
+
   const active = data?.items.filter((c) => c.status === 'Active') ?? []
   const others = data?.items.filter((c) => c.status !== 'Active') ?? []
+  const repos = reposData?.items ?? []
 
   return (
     <div className="flex h-full flex-col">
       {/* New conversation */}
       <div className="p-3 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            disabled={isCreating}
-            className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground disabled:opacity-50 h-8"
-          >
-            <span className="flex items-center gap-2">
-              {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Nueva consulta
-            </span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Tipo de agente</div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 text-sm" onClick={() => onCreateConversation('Knowledge')}>
-              <Bot className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Knowledge</p>
-                <p className="text-xs text-muted-foreground">Base de conocimiento</p>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 text-sm" onClick={() => onCreateConversation('Consultant')}>
-              <Brain className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Consultant</p>
-                <p className="text-xs text-muted-foreground">Consultoría de arquitectura</p>
-              </div>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {showRepoPicker ? (
+          <RepoPicker
+            repos={repos}
+            selectedId={selectedRepoId}
+            onSelect={setSelectedRepoId}
+            onConfirm={handleRepoConfirm}
+            onBack={handleRepoBack}
+            isCreating={isCreating}
+          />
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              disabled={isCreating}
+              className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground disabled:opacity-50 h-8"
+            >
+              <span className="flex items-center gap-2">
+                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Nueva consulta
+              </span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Tipo de agente</div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2 text-sm" onClick={() => onCreateConversation('Knowledge')}>
+                <Bot className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Knowledge</p>
+                  <p className="text-xs text-muted-foreground">Base de conocimiento</p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2 text-sm" onClick={handleConsultantClick}>
+                <Brain className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Consultant</p>
+                  <p className="text-xs text-muted-foreground">Consultoría de arquitectura</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <Separator />

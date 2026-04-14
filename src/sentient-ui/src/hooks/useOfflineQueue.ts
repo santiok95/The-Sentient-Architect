@@ -16,7 +16,7 @@ import { useUiStore, selectOfflineQueue } from '@/store/ui-store'
 interface SendMessagePayload {
   conversationId: string
   content: string
-  mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
+  contextMode?: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
 }
 
 interface UseOfflineQueueOptions {
