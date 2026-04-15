@@ -23,6 +23,11 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
         builder.Property(u => u.IsActive)
             .IsRequired();
 
+        builder.Property(u => u.RefreshToken)
+            .HasMaxLength(256);
+
+        builder.Property(u => u.RefreshTokenExpiresAt);
+
         builder.HasIndex(u => u.TenantId);
     }
 }

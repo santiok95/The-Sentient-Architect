@@ -12,4 +12,9 @@ public class ApplicationUser : IdentityUser<Guid>
     public Guid TenantId { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsActive { get; set; } = true;
+
+    // Refresh token rotation — a new opaque token is issued on every /auth/refresh call.
+    // The previous token is invalidated immediately, so a stolen token can only be used once.
+    public string? RefreshToken { get; set; }
+    public DateTime? RefreshTokenExpiresAt { get; set; }
 }

@@ -1,12 +1,11 @@
-using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
 using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Data;
-using System.Text;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -54,28 +53,29 @@ public class AuthEndpoints : IEndpointModule
         group.MapPost("/login", async (
             [FromBody] LoginRequest body,
             [FromServices] UserManager<ApplicationUser> userManager,
-            [FromServices] ITokenService tokenService) =>
+            [FromServices] ITokenService tokenService,
+            [FromServices] IConfiguration configuration) =>
         {
             var user = await userManager.FindByEmailAsync(body.Email);
 
             if (user is null || !await userManager.CheckPasswordAsync(user, body.Password))
                 return Results.Unauthorized();
 
-            var roles       = await userManager.GetRolesAsync(user);
-            var expiresDays = 7;
+            var roles = await userManager.GetRolesAsync(user);
+            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpiresInDays"], out var rd) ? rd : 7;
 
-            var token = tokenService.CreateToken(
-                user.Id,
-                user.Email!,
-                user.DisplayName,
-                user.TenantId,
-                roles);
+            var accessToken  = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
+            var refreshToken = GenerateRefreshToken();
+
+            user.RefreshToken          = refreshToken;
+            user.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays);
+            await userManager.UpdateAsync(user);
 
             return Results.Ok(new
             {
-                token,
-                refreshToken = token, // JWT re-used as refresh credential (stateless)
-                expiresIn    = expiresDays * 86400,
+                token        = accessToken,
+                refreshToken,
+                expiresIn    = 86400, // access token: 1 day
                 user = new
                 {
                     id          = user.Id,
@@ -96,51 +96,45 @@ public class AuthEndpoints : IEndpointModule
             [FromServices] ITokenService tokenService,
             [FromServices] IConfiguration configuration) =>
         {
-            var key = configuration["Jwt:Key"];
-            if (string.IsNullOrWhiteSpace(key))
-                return Results.Problem("JWT not configured");
+            // Look up the user by the opaque refresh token value.
+            // Using a timing-safe comparison is not required here because we query the DB by exact match —
+            // the DB lookup itself is the gate; an invalid token returns no user.
+            var user = await userManager.Users
+                .FirstOrDefaultAsync(u => u.RefreshToken == body.RefreshToken);
 
-            // Validate the submitted token (expired or not) to extract the userId claim
-            var handler = new JwtSecurityTokenHandler();
-            SecurityToken? validated = null;
-            try
-            {
-                handler.ValidateToken(body.RefreshToken, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
-                    ValidateIssuer           = false,
-                    ValidateAudience         = false,
-                    ValidateLifetime         = false, // allow expired tokens
-                    ClockSkew                = TimeSpan.Zero,
-                }, out validated);
-            }
-            catch
-            {
-                return Results.Unauthorized();
-            }
-
-            var jwt = (JwtSecurityToken)validated;
-            var subClaim = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-            if (!Guid.TryParse(subClaim, out var userId))
-                return Results.Unauthorized();
-
-            var user = await userManager.FindByIdAsync(userId.ToString());
             if (user is null || !user.IsActive)
                 return Results.Unauthorized();
 
-            var roles    = await userManager.GetRolesAsync(user);
-            var newToken = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
+            // Reject expired refresh tokens
+            if (user.RefreshTokenExpiresAt is null || user.RefreshTokenExpiresAt < DateTime.UtcNow)
+                return Results.Unauthorized();
+
+            // Rotation: invalidate the current token and issue a new pair
+            var roles              = await userManager.GetRolesAsync(user);
+            var refreshExpiresDays = int.TryParse(configuration["Jwt:RefreshTokenExpiresInDays"], out var rd) ? rd : 7;
+            var newAccessToken     = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
+            var newRefreshToken    = GenerateRefreshToken();
+
+            user.RefreshToken          = newRefreshToken;
+            user.RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(refreshExpiresDays);
+            await userManager.UpdateAsync(user);
 
             return Results.Ok(new
             {
-                token        = newToken,
-                refreshToken = newToken,
+                token        = newAccessToken,
+                refreshToken = newRefreshToken,
             });
         })
         .WithName("RefreshToken")
         .WithOpenApi()
         .AllowAnonymous();
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        Span<byte> bytes = stackalloc byte[64];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes);
     }
 
     private record RegisterRequest(string Email, string Password, string DisplayName);

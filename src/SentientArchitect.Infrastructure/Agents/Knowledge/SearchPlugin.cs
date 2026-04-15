@@ -1,9 +1,9 @@
-using System;
 using System.ComponentModel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Application.Common.Security;
 using SentientArchitect.Domain.Constants;
 
 namespace SentientArchitect.Infrastructure.Agents.Knowledge;
@@ -36,7 +36,15 @@ public sealed class SearchPlugin(
         if (results.Any())
         {
             searchLines.AddRange(results.Select((r, i) =>
-                $"{i + 1}. [Project Rule: {r.Title}] [Relevance: {r.Score:F2}]\nContext: {r.ChunkText}"));
+            {
+                var safeTitle = PromptSanitizer.Sanitize(r.Title);
+                var safeChunk = PromptSanitizer.Sanitize(r.ChunkText);
+
+                if (PromptSanitizer.ContainsInjection(r.Title) || PromptSanitizer.ContainsInjection(r.ChunkText))
+                    logger.LogWarning("PROMPT INJECTION DETECTED | KnowledgeItem title='{Title}' may contain injection patterns.", r.Title);
+
+                return $"{i + 1}. [Project Rule: {safeTitle}] [Relevance: {r.Score:F2}]\nContext: {safeChunk}";
+            }));
         }
 
         // 2. Keyword Fallback (Atomic keywords) - ALWAYS do keywords too to be safe
@@ -63,7 +71,13 @@ public sealed class SearchPlugin(
             {
                 if (!searchLines.Any(l => l.Contains(m.Title)))
                 {
-                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {m.OriginalContent}");
+                    var safeTitle   = PromptSanitizer.Sanitize(m.Title);
+                    var safeContent = PromptSanitizer.Sanitize(m.OriginalContent);
+
+                    if (PromptSanitizer.ContainsInjection(m.Title) || PromptSanitizer.ContainsInjection(m.OriginalContent))
+                        logger.LogWarning("PROMPT INJECTION DETECTED | KnowledgeItem title='{Title}' may contain injection patterns.", m.Title);
+
+                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {safeTitle}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {safeContent}");
                 }
             }
         }
