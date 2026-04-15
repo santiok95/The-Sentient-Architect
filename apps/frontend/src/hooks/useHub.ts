@@ -70,7 +70,10 @@ export function useHub(hubName: HubName, options: UseHubOptions = {}) {
 
     // ── Start connection ───────────────────────────────────────────────────────
     startHub(hubName)
-      .then(syncState)
+      .then(() => {
+        syncState()
+        console.log(`[useHub] ${hubName} connected`) // para probar code guardian
+      })
       .catch((err) => {
         console.warn(`[useHub] Failed to start ${hubName}:`, err)
         setHubStatus(hubName, {
