@@ -25,18 +25,12 @@ export interface KnowledgeListResponse {
   pageSize: number
 }
 
-export interface Tag {
-  name: string
-  count: number
-}
-
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
 export const KNOWLEDGE_KEYS = {
   all: ['knowledge'] as const,
   list: (page: number, pageSize: number, search: string, type: string) =>
     ['knowledge', 'list', page, pageSize, search, type] as const,
-  tags: () => ['knowledge', 'tags'] as const,
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -64,24 +58,20 @@ export function useKnowledgeItems(
   })
 }
 
-export function useKnowledgeTags() {
-  return useQuery({
-    queryKey: KNOWLEDGE_KEYS.tags(),
-    queryFn: async () => {
-      const res = await apiClient.get<Tag[]>('/api/v1/tags')
-      if (!res.ok) throw new Error(res.error ?? 'Error fetching tags')
-      return res.data
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-}
 
 export function useKnowledgeSearch() {
   return useMutation({
     mutationFn: async (input: { query: string; maxResults?: number; includeShared?: boolean }) => {
-      const res = await apiClient.post<KnowledgeItem[]>('/api/v1/knowledge/search', input)
+      const params = new URLSearchParams({
+        q: input.query,
+        ...(input.maxResults !== undefined && { maxResults: String(input.maxResults) }),
+        ...(input.includeShared !== undefined && { includeShared: String(input.includeShared) }),
+      })
+      const res = await apiClient.get<{ results: KnowledgeItem[]; totalFound: number }>(
+        `/api/v1/knowledge/search?${params.toString()}`,
+      )
       if (!res.ok) throw new Error(res.error ?? 'Error during search')
-      return res.data
+      return res.data?.results ?? []
     },
   })
 }
