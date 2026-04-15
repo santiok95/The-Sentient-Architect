@@ -77,7 +77,10 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseExceptionHandler();
 
-app.UseHttpsRedirection();
+// Only redirect to HTTPS in Development — in Docker we run plain HTTP behind a reverse proxy
+if (app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
