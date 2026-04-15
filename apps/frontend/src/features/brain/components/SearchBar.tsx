@@ -105,7 +105,7 @@ export function SearchBar({ onSearch }: Props) {
                           >
                             {item.type}
                           </Badge>
-                          {item.tags.slice(0, 2).map((t) => (
+                          {(item.tags ?? []).slice(0, 2).map((t) => (
                             <span key={t} className="text-xs text-muted-foreground">#{t}</span>
                           ))}
                         </div>

@@ -44,7 +44,12 @@ public class GetKnowledgeItemsUseCase(IApplicationDbContext db)
             .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
-            query = query.Where(k => k.Title.ToLower().Contains(request.Search.ToLower()));
+        {
+            var term = request.Search.ToLower();
+            query = query.Where(k =>
+                k.Title.ToLower().Contains(term) ||
+                k.KnowledgeItemTags.Any(t => t.Tag!.Name.ToLower().Contains(term)));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Type))
         {
