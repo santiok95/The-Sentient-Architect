@@ -93,16 +93,14 @@ public sealed class ChatExecutionService(
             if (request.ShouldCompact)
                 await CompactConversationAsync(request.ConversationId, chatService, chatHistory, ct);
 
-            if (!isConsultant)
-            {
-                return await RunDeterministicKnowledgeFlowAsync(
-                    request, chatService, chatHistory, onToken, ct);
-            }
+            var result = !isConsultant
+                ? await RunDeterministicKnowledgeFlowAsync(request, chatService, chatHistory, onToken, ct)
+                : await RunDeterministicConsultantFlowAsync(request, chatService, chatHistory, onToken, ct);
 
-            // Keep consultant stable while Anthropic tool-call protocol through the bridge
-            // is still intermittently failing with tool_use/tool_result mismatches.
-            return await RunDeterministicConsultantFlowAsync(
-                request, chatService, chatHistory, onToken, ct);
+            if (result.Succeeded && result.Data is not null)
+                await TrackTokenUsageAsync(request.Message, result.Data.AssistantMessage, ct);
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -368,6 +366,36 @@ public sealed class ChatExecutionService(
             output += "\n";
 
         return output;
+    }
+
+    private async Task TrackTokenUsageAsync(string userMessage, string assistantMessage, CancellationToken ct)
+    {
+        try
+        {
+            var userId   = userAccessor.GetCurrentUserId();
+            var tenantId = userAccessor.GetCurrentTenantId();
+            if (userId == Guid.Empty) return;
+
+            // Approximate token count: 1 token ≈ 4 characters (GPT-style estimate)
+            var estimatedTokens = (long)Math.Ceiling((userMessage.Length + assistantMessage.Length) / 4.0);
+
+            var today   = DateOnly.FromDateTime(DateTime.UtcNow);
+            var tracker = await db.TokenUsageTrackers
+                .FirstOrDefaultAsync(t => t.UserId == userId && t.Date == today, ct);
+
+            if (tracker is null)
+            {
+                tracker = new Domain.Entities.TokenUsageTracker(userId, tenantId, today);
+                db.TokenUsageTrackers.Add(tracker);
+            }
+
+            tracker.ConsumeTokens(estimatedTokens);
+            await db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Token tracking is best-effort — must not block the user's response.
+        }
     }
 
     private async Task CompactConversationAsync(
