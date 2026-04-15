@@ -131,6 +131,8 @@ public static class InfrastructureServiceExtensions
         }
         else
         {
+            // NullEmbeddingService returns zero vectors — semantic search will not work.
+            // Program.cs startup validation logs a warning (dev) or aborts (production).
             services.AddScoped<IEmbeddingService, NullEmbeddingService>();
         }
 

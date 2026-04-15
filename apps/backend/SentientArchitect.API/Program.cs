@@ -60,6 +60,34 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// ── Startup validation — fail fast on missing critical config ─────────────
+var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+var cfg = app.Configuration;
+
+var missingKeys = new List<string>();
+if (string.IsNullOrWhiteSpace(cfg["AI:OpenAI:ApiKey"]))
+    missingKeys.Add("AI:OpenAI:ApiKey");
+if (string.IsNullOrWhiteSpace(cfg["AI:Anthropic:ApiKey"]))
+    missingKeys.Add("AI:Anthropic:ApiKey");
+if (string.IsNullOrWhiteSpace(cfg["Jwt:Key"]))
+    missingKeys.Add("Jwt:Key");
+
+if (missingKeys.Count > 0)
+{
+    var missing = string.Join(", ", missingKeys);
+    if (app.Environment.IsProduction())
+    {
+        startupLogger.LogCritical(
+            "Startup aborted — missing required configuration keys: {Keys}. " +
+            "Set them as environment variables or in appsettings.", missing);
+        return;
+    }
+
+    startupLogger.LogWarning(
+        "Missing configuration keys (non-fatal in Development): {Keys}. " +
+        "Embedding and/or AI features will not work.", missing);
+}
+
 // Apply pending migrations and seed roles + admin user
 using (var scope = app.Services.CreateScope())
 {
