@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoginForm } from './_components/LoginForm'
 
-export const metadata: Metadata = { title: 'Sign In' }
+export const metadata: Metadata = { title: 'Iniciar sesión' }
 
 /**
  * Login page — RSC outer shell, form interaction handled client-side.
@@ -22,14 +22,14 @@ export default function LoginPage() {
           <h1 className="font-heading text-xl font-semibold tracking-tight">
             The Sentient Architect
           </h1>
-          <p className="text-sm text-muted-foreground">Sign in to your workspace</p>
+          <p className="text-sm text-muted-foreground">Ingresá a tu workspace</p>
         </div>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base">Welcome back</CardTitle>
+            <CardTitle className="font-heading text-base">Bienvenido de nuevo</CardTitle>
             <CardDescription className="text-xs">
-              Enter your credentials to access your knowledge base.
+              Ingresá tus credenciales para acceder a tu base de conocimiento.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -39,9 +39,9 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="justify-center pt-0">
             <p className="text-xs text-muted-foreground">
-              Don&apos;t have an account?{' '}
+              ¿No tenés cuenta?{' '}
               <Link href="/register" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                Register
+                Registrate
               </Link>
             </p>
           </CardFooter>

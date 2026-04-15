@@ -58,7 +58,7 @@ export function LoginForm() {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password" className="text-xs font-medium">
-          Password
+          Contraseña
         </Label>
         <Input
           id="password"
@@ -81,10 +81,10 @@ export function LoginForm() {
         {isPending ? (
           <>
             <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-            Signing in…
+            Iniciando sesión…
           </>
         ) : (
-          'Sign In'
+          'Iniciar sesión'
         )}
       </Button>
     </form>

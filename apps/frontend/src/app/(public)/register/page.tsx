@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
-export const metadata: Metadata = { title: 'Create Account' }
+export const metadata: Metadata = { title: 'Crear cuenta' }
 
 export default function RegisterPage() {
   return (
@@ -19,26 +19,26 @@ export default function RegisterPage() {
           <h1 className="font-heading text-xl font-semibold tracking-tight">
             The Sentient Architect
           </h1>
-          <p className="text-sm text-muted-foreground">Create your developer workspace</p>
+          <p className="text-sm text-muted-foreground">Creá tu workspace de desarrollo</p>
         </div>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base">New Account</CardTitle>
+            <CardTitle className="font-heading text-base">Nueva cuenta</CardTitle>
             <CardDescription className="text-xs">
-              Fill in the details below to get started.
+              Completá los datos para empezar.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="displayName" className="text-xs font-medium">
-                Display Name
+                Nombre para mostrar
               </Label>
               <Input
                 id="displayName"
                 name="displayName"
                 type="text"
-                placeholder="Jane Doe"
+                placeholder="Juan Pérez"
                 autoComplete="name"
                 required
               />
@@ -58,7 +58,7 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password" className="text-xs font-medium">
-                Password
+                Contraseña
               </Label>
               <Input
                 id="password"
@@ -71,7 +71,7 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="confirmPassword" className="text-xs font-medium">
-                Confirm Password
+                Confirmar contraseña
               </Label>
               <Input
                 id="confirmPassword"
@@ -83,14 +83,14 @@ export default function RegisterPage() {
               />
             </div>
             <Button type="submit" className="w-full" size="sm">
-              Create Account
+              Crear cuenta
             </Button>
           </CardContent>
           <CardFooter className="justify-center pt-0">
             <p className="text-xs text-muted-foreground">
-              Already have an account?{' '}
+              ¿Ya tenés cuenta?{' '}
               <Link href="/login" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                Sign In
+                Iniciar sesión
               </Link>
             </p>
           </CardFooter>
