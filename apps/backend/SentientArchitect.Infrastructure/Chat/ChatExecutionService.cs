@@ -49,6 +49,9 @@ public sealed class ChatExecutionService(
         - Search-SearchByMeaning: Search the knowledge base for relevant rules
         - RepositoryContext-GetUserRepositoriesContext: Get the architectural patterns detected
           in the user's actual analyzed repositories
+        - Trends-GetRelevantTrends: Get technology trends relevant to a given stack or keywords.
+          Use this when the user asks about modernization, trends, or when you want to suggest
+          concrete improvement opportunities backed by real ecosystem data.
 
         MANDATORY RULES — never violate these:
         1. ALWAYS call Profile-GetUserProfile before giving any recommendation.
@@ -71,6 +74,14 @@ public sealed class ChatExecutionService(
           9. If the request provides an explicit preferred stack, that stack is binding.
               Keep the main recommendation and code examples in that stack unless the user
               explicitly asks for alternatives.
+          10. When the user asks about modernization opportunities, or when you are analyzing
+              an internal/trusted repository and want to suggest improvements, call
+              Trends-GetRelevantTrends with stack keywords extracted from the profile and
+              repository context. Use the results to produce a concrete
+              'Oportunidades de modernización' section with bullets in this format:
+              [Trend: {name} {direction}] — {why it applies to THIS project} → {first concrete step}.
+              In RepoBound mode, only suggest trends that are COMPATIBLE with the detected patterns.
+              NEVER suggest a trend that contradicts an established architecture convention.
         """;
 
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
@@ -301,7 +312,11 @@ public sealed class ChatExecutionService(
             "18. Format response in two layers: short executive summary first (2-3 sentences max), then optional bullet-point detail.\n" +
             "19. Keep practical next steps explicit and actionable.\n" +
             "20. When the user asks for an opinion on a repo, DO NOT ask for more context — you already have the analysis findings. " +
-            "Give a direct opinion based on what you see: executive summary of severity, top 3 issues to fix first, and one positive observation.");
+            "Give a direct opinion based on what you see: executive summary of severity, top 3 issues to fix first, and one positive observation.\n" +
+            "21. When context mode is RepoBound and the repository has an ABOUT.md intent, use it to frame recommendations in terms of the author's stated vision.\n" +
+            "22. When producing modernization suggestions, format each trend bullet as: " +
+            "'[Trend: {name} {↑/→}] — {why relevant to THIS project} → {first concrete adoption step}'. " +
+            "Only include trends that are compatible with the detected architecture patterns.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);

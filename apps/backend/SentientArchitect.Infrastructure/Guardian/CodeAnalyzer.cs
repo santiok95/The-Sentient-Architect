@@ -160,6 +160,15 @@ public sealed class CodeAnalyzer(
                           $"({criticalCount} críticos, {highCount} altos) en {totalFiles} archivos " +
                           $"({csFiles.Length} C#, {tsFiles.Length} TypeScript/JavaScript).";
 
+            // Read ABOUT.md if present — captures the author's intent for the project
+            var aboutPath = Path.Combine(clonePath, "ABOUT.md");
+            if (File.Exists(aboutPath))
+            {
+                var aboutContent = await File.ReadAllTextAsync(aboutPath, ct);
+                repositoryInfo.SetAboutContent(aboutContent);
+                logger.LogInformation("ABOUT.md found and persisted for repository {RepositoryInfoId}", repositoryInfoId);
+            }
+
             report.Complete(summary, findings.Count, criticalCount);
             repositoryInfo.MarkAnalyzed();
             repositoryInfo.ClearLocalPath();

@@ -16,6 +16,7 @@ public class RepositoryInfoConfiguration : IEntityTypeConfiguration<RepositoryIn
         builder.Property(r => r.Trust).IsRequired().HasConversion<string>().HasMaxLength(50);
         builder.Property(r => r.DefaultBranch).HasMaxLength(255);
         builder.Property(r => r.PrimaryLanguage).HasMaxLength(100);
+        builder.Property(r => r.AboutContent).HasMaxLength(10000);
         builder.Property(r => r.UserId).IsRequired();
         builder.Property(r => r.TenantId).IsRequired();
         builder.Property(r => r.CreatedAt).IsRequired();

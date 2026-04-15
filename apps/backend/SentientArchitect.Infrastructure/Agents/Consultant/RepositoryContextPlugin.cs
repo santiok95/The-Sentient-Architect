@@ -66,6 +66,14 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
                 sb.AppendLine($"- Last commit: {repo.LastCommitAt.Value:yyyy-MM-dd}");
             sb.AppendLine($"- Analyzed on: {repo.LastAnalyzedAt!.Value:yyyy-MM-dd}");
 
+            if (!string.IsNullOrWhiteSpace(repo.AboutContent))
+            {
+                sb.AppendLine();
+                sb.AppendLine("**Intención del proyecto (ABOUT.md del autor):**");
+                sb.AppendLine(repo.AboutContent);
+                sb.AppendLine("↑ Usá esta información para alinear tus recomendaciones con la visión del autor.");
+            }
+
             var latestReport = await db.AnalysisReports
                 .AsNoTracking()
                 .Where(r => r.RepositoryInfoId == repo.Id && r.Status == AnalysisStatus.Completed)

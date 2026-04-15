@@ -449,3 +449,22 @@ var knowledgeAgent = new ChatCompletionAgent
 - **Querying still works**: We can join via `UserId` in LINQ queries from Infrastructure/Application layers.
 
 **Trade-off**: We lose the convenience of `Include(x => x.User)` eager loading on `KnowledgeItem`. This is acceptable because User data is typically loaded separately (e.g., from the auth context or a dedicated query), not eagerly with every KnowledgeItem fetch.
+
+---
+
+### ADR-003: Eliminar `Domain.User` — `ApplicationUser` como única entidad de identidad
+
+**Status**: Accepted  
+**Date**: 2026-04-15  
+**Context**: El proyecto tenía un POCO `Domain.User : BaseEntity` en la capa Domain y `ApplicationUser : IdentityUser<Guid>` en la capa Data. Ambas representaban el mismo concepto (el usuario del sistema). `ApplicationContext` ignoraba `Domain.User` explícitamente con `builder.Ignore<User>()`, lo que era una señal de alerta documentada como "RED FLAG 2 — Identidad Esquizofrénica".
+
+**Decision**: Eliminar `Domain.User` por completo. `ApplicationUser` en la capa Data es la única fuente de verdad para la identidad. Las referencias a UserId en entidades de Domain siguen siendo `Guid` puro (sin navigation property), siguiendo el patrón de ADR-002.
+
+**Rationale**:
+- `Domain.User` nunca fue mapeado a una tabla real — estaba ignorado por EF Core desde el inicio.
+- Ningún use case ni plugin lo instanciaba o consultaba directamente.
+- Mantenerlo creaba confusión para cualquier desarrollador nuevo que leyera el código.
+- `ApplicationUser` ya provee todo lo necesario: Id, Email, roles, claims — accesible vía ASP.NET Identity.
+- Los datos específicos del perfil de usuario (stack, preferencias) viven en `UserProfile`, separado correctamente.
+
+**Trade-off**: Perdemos la "pureza teórica" de tener un User en Domain. En la práctica, Domain ya dependía de `Guid UserId` como proxy — la pureza era ilusoria.

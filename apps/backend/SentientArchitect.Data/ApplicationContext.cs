@@ -42,11 +42,6 @@ public class ApplicationContext : IdentityDbContext<ApplicationUser, IdentityRol
     {
         base.OnModelCreating(builder);
 
-        // --- SOLUCIÓN RED FLAG 2: Identidad Esquizofrénica ---
-        // Le decimos explícitamente a EF Core que IGNORE nuestro POCO estructurado de Root Entity del Dominio.
-        // Solo operará con ApplicationUser para las migraciones y base de datos.
-        builder.Ignore<SentientArchitect.Domain.Entities.User>();
-
         // Aseguramos que EF agregue el CREATE EXTENSION vector
         builder.HasAnnotation("Npgsql:PostgresExtension:vector", ",,");
 

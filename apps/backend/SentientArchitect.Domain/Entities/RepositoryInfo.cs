@@ -56,6 +56,13 @@ public class RepositoryInfo : BaseEntity
         PrimaryLanguage = language;
     }
 
+    public string? AboutContent { get; private set; }
+
+    public void SetAboutContent(string? content)
+    {
+        AboutContent = string.IsNullOrWhiteSpace(content) ? null : content.Trim();
+    }
+
     public void MarkAnalyzed()
     {
         LastAnalyzedAt = DateTime.UtcNow;

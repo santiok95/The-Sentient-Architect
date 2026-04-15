@@ -15,6 +15,7 @@ public sealed class ConsultantAgentFactory
         var summaryPlugin           = services.GetRequiredService<SummaryPlugin>();
         var searchPlugin            = services.GetRequiredService<SearchPlugin>();
         var repositoryContextPlugin = services.GetRequiredService<RepositoryContextPlugin>();
+        var trendsPlugin            = services.GetRequiredService<TrendsPlugin>();
 
         var builder = Kernel.CreateBuilder();
         builder.Services.AddSingleton(chatService);
@@ -22,6 +23,7 @@ public sealed class ConsultantAgentFactory
         builder.Plugins.AddFromObject(summaryPlugin,           "Summary");
         builder.Plugins.AddFromObject(searchPlugin,            "Search");
         builder.Plugins.AddFromObject(repositoryContextPlugin, "RepositoryContext");
+        builder.Plugins.AddFromObject(trendsPlugin,            "Trends");
 
         return builder.Build();
     }
