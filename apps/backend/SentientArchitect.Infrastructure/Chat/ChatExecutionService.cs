@@ -90,6 +90,9 @@ public sealed class ChatExecutionService(
             var chatService = kernel.GetRequiredService<IChatCompletionService>();
             var chatHistory = BuildChatHistory(history, isConsultant ? ConsultantSystemPrompt : KnowledgeSystemPrompt);
 
+            if (request.ShouldCompact)
+                await CompactConversationAsync(request.ConversationId, chatService, chatHistory, ct);
+
             if (!isConsultant)
             {
                 return await RunDeterministicKnowledgeFlowAsync(
@@ -365,6 +368,38 @@ public sealed class ChatExecutionService(
             output += "\n";
 
         return output;
+    }
+
+    private async Task CompactConversationAsync(
+        Guid conversationId,
+        IChatCompletionService chatService,
+        ChatHistory chatHistory,
+        CancellationToken ct)
+    {
+        try
+        {
+            var compactionPrompt = new ChatHistory();
+            compactionPrompt.AddSystemMessage(
+                "You are a conversation summarizer. Your only job is to produce a concise summary " +
+                "of the conversation below, capturing: the main topic, key decisions made, important " +
+                "facts established, and any open questions. Be brief — 3 to 6 sentences maximum.");
+
+            foreach (var msg in chatHistory.Where(m => m.Role != AuthorRole.System))
+                compactionPrompt.Add(msg);
+
+            compactionPrompt.AddUserMessage("Summarize this conversation now.");
+
+            var response = await chatService.GetChatMessageContentAsync(compactionPrompt, cancellationToken: ct);
+            var summary  = response.Content ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(summary))
+                await summaryPlugin.SaveConversationSummaryAsync(
+                    conversationId.ToString(), summary, remainingTokens: 0, ct);
+        }
+        catch
+        {
+            // Compaction is best-effort — a failure must not block the user's message.
+        }
     }
 
     private static ChatHistory BuildChatHistory(IReadOnlyList<ConversationMessage> messages, string systemPrompt)

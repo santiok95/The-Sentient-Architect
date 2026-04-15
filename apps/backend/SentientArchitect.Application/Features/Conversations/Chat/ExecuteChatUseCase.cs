@@ -2,13 +2,15 @@ using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
 using SentientArchitect.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace SentientArchitect.Application.Features.Conversations.Chat;
 
 public class ExecuteChatUseCase(
     IApplicationDbContext db,
     SaveMessageUseCase saveMessageUseCase,
-    IChatExecutionService chatExecutionService)
+    IChatExecutionService chatExecutionService,
+    IOptions<ConversationOptions> options)
 {
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
         ExecuteChatRequest request,
@@ -47,6 +49,8 @@ public class ExecuteChatUseCase(
                 saveUserMessageResult.Errors,
                 saveUserMessageResult.ErrorType);
 
+        var shouldCompact = conversation.Messages.Count >= options.Value.CompactionThreshold;
+
         var executionResult = await chatExecutionService.ExecuteAsync(
             new ChatExecutionRequest(
                 request.ConversationId,
@@ -54,7 +58,8 @@ public class ExecuteChatUseCase(
                 conversation.AgentType,
                 request.ActiveRepositoryId,
                 request.PreferredStack,
-                request.ContextMode),
+                request.ContextMode,
+                shouldCompact),
             saveUserMessageResult.Data,
             onToken,
             ct);

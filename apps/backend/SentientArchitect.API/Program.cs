@@ -6,6 +6,7 @@ using SentientArchitect.API.Middleware;
 using SentientArchitect.API.Services;
 using SentientArchitect.Application;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Application.Features.Conversations.Chat;
 using SentientArchitect.Data.Postgres;
 using SentientArchitect.Infrastructure;
 using Scalar.AspNetCore;
@@ -50,6 +51,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddDataPostgres(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
+builder.Services.Configure<ConversationOptions>(
+    builder.Configuration.GetSection(ConversationOptions.SectionName));
 builder.Services.AddScoped<IAnalysisProgressReporter, AnalysisProgressReporter>();
 
 builder.Services.AddProblemDetails();

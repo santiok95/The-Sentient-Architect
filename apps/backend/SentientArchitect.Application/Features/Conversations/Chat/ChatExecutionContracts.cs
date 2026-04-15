@@ -16,7 +16,8 @@ public sealed record ChatExecutionRequest(
     AgentType AgentType,
     Guid? ActiveRepositoryId = null,
     string? PreferredStack = null,
-    ConsultantContextMode? ContextMode = null);
+    ConsultantContextMode? ContextMode = null,
+    bool ShouldCompact = false);
 
 public sealed record ChatExecutionResponse(
     string AssistantMessage,
