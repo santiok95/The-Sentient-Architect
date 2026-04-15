@@ -89,6 +89,7 @@ Tu socio de diseño, siempre disponible. Conversacional, con memoria, y con acce
 
 El agente combina análisis estático, contexto de dominio y tu historial para dar una respuesta calibrada — no un consejo genérico de ChatGPT.
 
+![Su respuesta](./docs/screenshots/06-consultant-repo-opinion-response.png)
 ---
 
 ## 🛡️ Code Guardian — Análisis de repositorios
