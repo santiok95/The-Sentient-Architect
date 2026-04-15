@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -22,10 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SentientArchitect.Domain\SentientArchitect.Domain.csproj" />
-    <ProjectReference Include="..\..\src\SentientArchitect.Application\SentientArchitect.Application.csproj" />
-    <ProjectReference Include="..\..\src\SentientArchitect.Data\SentientArchitect.Data.csproj" />
-    <ProjectReference Include="..\..\src\SentientArchitect.Infrastructure\SentientArchitect.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\SentientArchitect.Domain\SentientArchitect.Domain.csproj" />
+    <ProjectReference Include="..\..\SentientArchitect.Application\SentientArchitect.Application.csproj" />
+    <ProjectReference Include="..\..\SentientArchitect.Data\SentientArchitect.Data.csproj" />
+    <ProjectReference Include="..\..\SentientArchitect.Infrastructure\SentientArchitect.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
