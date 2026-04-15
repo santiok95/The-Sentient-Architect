@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Domain.Entities;
 using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Infrastructure.Agents.Consultant;
@@ -77,11 +78,12 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
             if (!string.IsNullOrWhiteSpace(latestReport.Summary))
                 sb.AppendLine($"- Analysis summary: {latestReport.Summary}");
 
-            var architectureFindings = await db.AnalysisFindings
+            var allFindings = await db.AnalysisFindings
                 .AsNoTracking()
-                .Where(f => f.AnalysisReportId == latestReport.Id && f.Category == "Architecture")
+                .Where(f => f.AnalysisReportId == latestReport.Id)
                 .ToListAsync(cancellationToken);
 
+            var architectureFindings = allFindings.Where(f => f.Category == "Architecture").ToList();
             if (architectureFindings.Count > 0)
             {
                 sb.AppendLine();
@@ -89,6 +91,28 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
                 foreach (var finding in architectureFindings)
                     sb.AppendLine($"  - {finding.Message}");
             }
+
+            // Surface High and Critical findings so the consultant can reason about real issues
+            var importantFindings = allFindings
+                .Where(f => f.Severity == FindingSeverity.Critical || f.Severity == FindingSeverity.High)
+                .OrderBy(f => f.Severity)
+                .ToList();
+
+            if (importantFindings.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"**Code quality findings — {latestReport.TotalFindings} total ({latestReport.CriticalFindings} critical):**");
+                foreach (var group in importantFindings.GroupBy(f => f.Category))
+                {
+                    sb.AppendLine($"  [{group.Key}]");
+                    foreach (var f in group)
+                        sb.AppendLine($"    - [{f.Severity}] {f.Message} ({f.FilePath})");
+                }
+            }
+
+            var medLowCount = allFindings.Count(f => f.Severity == FindingSeverity.Medium || f.Severity == FindingSeverity.Low);
+            if (medLowCount > 0)
+                sb.AppendLine($"- Additionally {medLowCount} medium/low findings (ask user if they want detail).");
         }
 
         if (pending.Count > 0)

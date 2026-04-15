@@ -295,11 +295,12 @@ public sealed class ChatExecutionService(
             "13. If prior conversation messages suggest a different stack, treat them as outdated context and align to current 'Preferred stack'.\n" +
             "14. Unless the user explicitly asks for full implementation code, avoid very long code blocks and prioritize concise architecture guidance.\n" +
             "15. Never end with incomplete code blocks or dangling fragments. If a code fence is opened, close it.\n" +
-            "16. Output budget: keep the full answer under 220 words by default. Use short bullets and avoid large diagrams.\n" +
-            "17. If user asks architecture only, do not include implementation code.\n" +
-            "18. If 'Preferred stack' contains Java/Spring, do not output C#/.NET code as the primary proposal.\n" +
-            "16. Format response in two layers: short executive summary first, then optional detailed plan.\n" +
-            "17. Keep practical next steps explicit and actionable.");
+            "16. If 'Preferred stack' contains Java/Spring, do not output C#/.NET code as the primary proposal.\n" +
+            "17. Output budget: keep the full answer under 250 words by default. Use short bullets, avoid large diagrams.\n" +
+            "18. Format response in two layers: short executive summary first (2-3 sentences max), then optional bullet-point detail.\n" +
+            "19. Keep practical next steps explicit and actionable.\n" +
+            "20. When the user asks for an opinion on a repo, DO NOT ask for more context — you already have the analysis findings. " +
+            "Give a direct opinion based on what you see: executive summary of severity, top 3 issues to fix first, and one positive observation.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);
