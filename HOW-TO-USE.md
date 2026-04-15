@@ -104,15 +104,8 @@ Tu auditor silencioso. Cloná un repo, y el Guardian te devuelve una foto comple
 - **Copiar la tabla de hallazgos** al portapapeles en un click.
 - **Filtrar por severidad** (Critical / High / Medium / Low).
 
-### Log en vivo del análisis
-
-![Log en vivo](./docs/screenshots/08-guardian-live-log.png)
 
 Cada línea del análisis (clone → scan → roslyn → deps → completado) se streamea en tiempo real. No hay spinners eternos sin feedback.
-
-### Tabla de hallazgos
-
-![Tabla de hallazgos](./docs/screenshots/09-guardian-findings.png)
 
 Los hallazgos están categorizados por:
 - **Severidad** — Critical, High, Medium, Low.
@@ -135,41 +128,51 @@ Tu periscopio sobre el ecosistema tecnológico. Snapshots históricos de framewo
 - **Filtrar por categoría** (Frontend, Backend, AI/ML, DevOps, etc.).
 - **Consultar al Consultant** que usa estos datos automáticamente cuando le preguntás por modernización.
 
-### Detalle de un item del radar
-
-![Detalle de un item](./docs/screenshots/11-trends-detail.png)
-
-Cada tecnología tiene su propio contexto — no es solo un nombre en una lista. El Consultant lee esto cuando necesita recomendar alternativas reales y no inventadas.
 
 ---
 
-## 👑 Panel de Administración
 
-Para usuarios con rol `Admin`. El centro de control de contenido compartido y moderación.
+## 🎯 Casos de uso reales
 
-![Admin panel](./docs/screenshots/12-admin.png)
-
-**Qué podés hacer como Admin:**
-- **Revisar pedidos de publicación** — cuando un usuario quiere pasar un ítem personal a compartido, cae acá.
-- **Aprobar o rechazar** con un comentario de feedback.
-- **Ver estadísticas** de ingesta y uso del sistema.
-- **Gestionar usuarios** y roles.
-
-> 💡 El contenido del Brain empieza siendo personal (`TenantId = userId`). Solo pasa a ser compartido con el equipo (`TenantId = orgTenantId`) tras la aprobación explícita de un Admin.
-
----
-
-## 🎯 Flujo típico de un día
+### 👶 Para el Junior — "¿Cómo encaré esto?"
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ 1. Entrás → Login                                                │
-│ 2. Consultant → "¿Qué decidimos sobre caching el mes pasado?"   │
-│    → RAG busca en Brain, responde con link al ítem original.    │
-│ 3. Guardian → Subís el PR de esta mañana para auditar.          │
-│    → Ves hallazgos en vivo, arreglás lo crítico antes de mergear│
-│ 4. Brain → Ingesás la nueva decisión arquitectónica de la reu.  │
-│ 5. Trends → Chequeás qué surgió esta semana en el radar.        │
+│ Situación: Tiene que implementar autenticación en un proyecto.   │
+│                                                                  │
+│ 1. Consultant → "¿Cómo manejamos auth en nuestros proyectos?"   │
+│    → Busca en el Brain, devuelve la decisión documentada         │
+│      por los seniors: patrón, librerías, ejemplos reales.        │
+│                                                                  │
+│ 2. Guardian → Sube su propio repo para auditarlo.                │
+│    → Ve qué patrones no está siguiendo, qué riesgos tiene,       │
+│      con severidad y archivo exacto donde está el problema.      │
+│                                                                  │
+│ 3. Consultant → "Tengo estos hallazgos del Guardian, ¿cómo      │
+│    los resuelvo?"                                                │
+│    → Le da soluciones concretas basadas en el stack y            │
+│      las decisiones previas del equipo. No respuestas genéricas. │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 👴 Para el Senior — "¿Arrancamos bien este proyecto?"
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Situación: Comienza un proyecto nuevo o quiere modernizar uno.   │
+│                                                                  │
+│ 1. Trends Radar → Revisa el estado actual del ecosistema.        │
+│    → Ve qué frameworks están ganando tracción real, cuáles       │
+│      están en declive, sin tener que leer 50 artículos.          │
+│                                                                  │
+│ 2. Consultant → "Queremos modernizar nuestro stack de deploy.    │
+│    ¿Qué está usando la industria hoy?"                           │
+│    → Combina el Radar + el Brain del equipo para dar una         │
+│      recomendación alineada al contexto propio, no genérica.     │
+│                                                                  │
+│ 3. Brain → Documenta la decisión final con contexto, tradeoffs   │
+│    y fecha. Queda indexada para que el Junior la encuentre       │
+│    mañana cuando tenga la misma duda.                            │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -179,6 +182,3 @@ Para usuarios con rol `Admin`. El centro de control de contenido compartido y mo
 
 Las imágenes de esta guía viven en [`docs/screenshots/`](./docs/screenshots/). Si ves un placeholder roto, probablemente estás en una build anterior a la publicación de assets — revisá el último release.
 
----
-
-**¿Listo para empezar?** Volvé al [README](./README.md) para las instrucciones de setup y despliegue.
