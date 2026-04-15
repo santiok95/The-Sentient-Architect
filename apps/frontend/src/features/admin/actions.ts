@@ -2,8 +2,10 @@
 
 import { authedActionClient } from '@/lib/action-client'
 import { reviewPublishRequestSchema } from '@/lib/schemas'
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+// Server-side URL: API_INTERNAL_URL is used when Next.js runs inside Docker
+// (localhost inside the container doesn't reach the host).
+// Falls back to NEXT_PUBLIC_API_URL for local dev (no Docker).
+const BASE_URL = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5291'
 
 export const reviewPublishRequestAction = authedActionClient
   .schema(reviewPublishRequestSchema)

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { apiClient } from '@/lib/api-client'
 import { useTrends, TREND_CATEGORIES, TRACTION_LEVELS } from '../hooks/useTrends'
 import type { Trend, TractionLevel } from '@/lib/api.types'
 
@@ -173,15 +174,14 @@ export function TrendsTable() {
   async function handleSync() {
     setIsSyncing(true)
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'}/api/v1/admin/trends/sync`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      )
+      const res = await apiClient.post('/api/v1/admin/trends/sync', {})
       if (res.ok) {
         toast.success('Scan en cola', {
           description: 'Estimado: 5 minutos',
           style: { fontFamily: 'var(--font-fira-code)' },
         })
+      } else {
+        toast.error('Error al iniciar scan', { description: res.error })
       }
     } catch {
       toast.error('Error al iniciar scan')

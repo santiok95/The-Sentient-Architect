@@ -61,13 +61,17 @@ const NAV_GROUPS: NavGroup[] = [
   {
     section: 'Admin',
     items: [
-      { label: 'Users', href: '/admin/users', Icon: Users },
+      // TODO: Implement /admin/users page
+      // { label: 'Users', href: '/admin/users', Icon: Users },
       { label: 'Publish Requests', href: '/admin/publish-requests', Icon: Rss, badge: '3', badgeVariant: 'red' },
     ],
   },
   {
     section: 'System',
-    items: [{ label: 'Settings', href: '/settings', Icon: Settings }],
+    items: [
+      // TODO: Implement /settings page
+      // { label: 'Settings', href: '/settings', Icon: Settings },
+    ],
   },
 ]
 

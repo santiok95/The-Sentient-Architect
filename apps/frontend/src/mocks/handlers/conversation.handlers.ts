@@ -1,7 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import { MOCK_REPO_IDS } from './repository.handlers'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+import { getApiBaseUrl } from '@/lib/config'
+
+const BASE_URL = getApiBaseUrl()
 
 // Mock repo for RepoBound conversations — UUID matches repository.handlers
 const MOCK_REPO = {

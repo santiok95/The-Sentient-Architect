@@ -4,6 +4,7 @@
  * Works client-side only. SSR-safe guard on localStorage access.
  */
 import { apiClient, saveTokens, clearTokens } from './api-client'
+import { stopHub } from './signalr'
 import type { LoginInput, RegisterInput } from './schemas'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,5 +75,11 @@ export async function logout(): Promise<void> {
     clearTokens()
     // Clear the server-action cookie
     document.cookie = 'sa_token=; path=/; SameSite=Strict; max-age=0'
+    // Stop all hub connections so the next login starts fresh singletons
+    await Promise.allSettled([
+      stopHub('conversation'),
+      stopHub('ingestion'),
+      stopHub('analysis'),
+    ])
   }
 }

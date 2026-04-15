@@ -1,7 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import type { PublishRequest } from '@/lib/api.types'
 
-const BASE = 'http://localhost:5000/api/v1'
+import { getApiBaseUrl } from '@/lib/config'
+
+const BASE = getApiBaseUrl() + '/api/v1'
 
 export let MOCK_REQUESTS: PublishRequest[] = [
   {

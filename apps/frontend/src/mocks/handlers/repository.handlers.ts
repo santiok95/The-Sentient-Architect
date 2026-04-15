@@ -1,6 +1,8 @@
 import { http, HttpResponse } from 'msw'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+import { getApiBaseUrl } from '@/lib/config'
+
+const BASE_URL = getApiBaseUrl()
 
 // Fixed UUIDs so conversation.handlers.ts can reference them safely
 export const MOCK_REPO_IDS = {

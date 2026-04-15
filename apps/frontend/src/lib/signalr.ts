@@ -15,23 +15,9 @@ import {
   LogLevel,
 } from '@microsoft/signalr'
 import { getToken } from './auth'
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
-
-// When the API is on plain HTTP, WebSocket and SSE upgrades get redirected to
-// HTTPS by ASP.NET's UseHttpsRedirection middleware and fail silently.
-// Skip the noisy fallback attempts and go straight to LongPolling.
-const transport = BASE_URL.startsWith('http://')
-  ? HttpTransportType.LongPolling
-  : undefined // auto-negotiate (WS preferred) on HTTPS
+import { getApiBaseUrl, config } from './config'
 
 export type HubName = 'conversation' | 'ingestion' | 'analysis'
-
-const HUB_PATHS: Record<HubName, string> = {
-  conversation: '/hubs/conversation',
-  ingestion: '/hubs/ingestion',
-  analysis: '/hubs/analysis',
-}
 
 // In-memory singleton registry — one connection per hub
 const connections = new Map<HubName, HubConnection>()
@@ -39,28 +25,43 @@ const connections = new Map<HubName, HubConnection>()
 /**
  * Returns the singleton HubConnection for `hubName`.
  * Creates it on first call. Never recreates it.
+ *
+ * ⚠️  Called only client-side (inside useEffect via useHub).
+ * getApiBaseUrl() is safe here because window.__API_BASE_URL is already set
+ * by the time any React effect runs.
  */
 export function getHubConnection(hubName: HubName): HubConnection {
   if (connections.has(hubName)) {
     return connections.get(hubName)!
   }
 
+  // Resolve URL at connection-creation time (always client-side, post-hydration)
+  const baseUrl = getApiBaseUrl()
+  const hubPath = config.signalrHubs[hubName]
+
+  // When the API is on plain HTTP, WebSocket and SSE upgrades get redirected to
+  // HTTPS by ASP.NET's UseHttpsRedirection middleware and fail silently.
+  // Skip the noisy fallback attempts and go straight to LongPolling.
+  const transport = baseUrl.startsWith('http://')
+    ? HttpTransportType.LongPolling
+    : undefined // auto-negotiate (WS preferred) on HTTPS
+
   const connection = new HubConnectionBuilder()
-    .withUrl(`${BASE_URL}${HUB_PATHS[hubName]}`, {
+    .withUrl(`${baseUrl}${hubPath}`, {
+      // accessTokenFactory is called on every request — always reads the latest token.
+      // Return '' when no token: SignalR omits the Authorization header for empty strings
+      // in @microsoft/signalr ≥ 8.x (unlike null which breaks the type).
       accessTokenFactory: () => getToken() ?? '',
       transport,
     })
     .withAutomaticReconnect({
       nextRetryDelayInMilliseconds: (retryContext) => {
-        // Exponential backoff capped at 30s
         const delays = [1000, 2000, 5000, 10000, 30000]
         return delays[Math.min(retryContext.previousRetryCount, delays.length - 1)]
       },
     })
     .configureLogging(
-      // On HTTP dev (local), transport negotiation attempts produce expected
-      // WS/SSE failures that are noise — silence them. On HTTPS (prod) log warnings.
-      BASE_URL.startsWith('http://') ? LogLevel.None : LogLevel.Warning,
+      baseUrl.startsWith('http://') ? LogLevel.None : LogLevel.Warning,
     )
     .build()
 

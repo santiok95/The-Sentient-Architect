@@ -6,6 +6,8 @@
  * Import { apiClient } from '@/lib/api-client' and call its methods.
  */
 
+import { getApiBaseUrl } from './config'
+
 // ─── Result Pattern (mirrors .NET backend) ───────────────────────────────────
 
 export type ApiSuccess<T> = { ok: true; data: T; status: number }
@@ -39,7 +41,7 @@ export function clearTokens(): void {
 
 // ─── Core Fetch Wrapper ───────────────────────────────────────────────────────
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+const getBaseUrl = (): string => getApiBaseUrl()
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
@@ -54,7 +56,7 @@ async function tryRefresh(): Promise<string | null> {
   if (!refreshToken) return null
 
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+    const res = await fetch(`${getBaseUrl()}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -88,7 +90,7 @@ async function request<T>(
   })
 
   const makeRequest = async (token: string | null): Promise<Response> =>
-    fetch(`${BASE_URL}${path}`, {
+    fetch(`${getBaseUrl()}${path}`, {
       ...restOptions,
       headers: buildHeaders(token),
       body: body !== undefined ? JSON.stringify(body) : undefined,

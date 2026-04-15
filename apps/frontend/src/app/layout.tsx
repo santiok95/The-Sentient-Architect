@@ -44,6 +44,13 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${firaCode.variable} h-full`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__API_BASE_URL = "${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5291'}"`,
+          }}
+        />
+      </head>
       <body className="min-h-full antialiased">
         <ThemeProvider
           attribute="class"

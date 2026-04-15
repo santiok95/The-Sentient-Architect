@@ -14,9 +14,11 @@ const PATH_TITLES: Record<string, string> = {
   '/consultant': 'Consultant',
   '/guardian': 'Code Guardian',
   '/trends': 'Trends Radar',
-  '/admin/users': 'Users',
+  // TODO: Uncomment when /admin/users is implemented
+  // '/admin/users': 'Users',
   '/admin/publish-requests': 'Publish Requests',
-  '/settings': 'Settings',
+  // TODO: Uncomment when /settings is implemented
+  // '/settings': 'Settings',
 }
 
 function usePageTitle(): string {

@@ -1,7 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import type { Trend } from '@/lib/api.types'
 
-const BASE = 'http://localhost:5000/api/v1'
+import { getApiBaseUrl } from '@/lib/config'
+
+const BASE = getApiBaseUrl() + '/api/v1'
 
 const MOCK_TRENDS: Trend[] = [
   {
