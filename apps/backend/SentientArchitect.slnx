@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="src/SentientArchitect.API/SentientArchitect.API.csproj" />
+  <Project Path="src/SentientArchitect.Application/SentientArchitect.Application.csproj" />
+  <Project Path="src/SentientArchitect.Data.Postgres/SentientArchitect.Data.Postgres.csproj" />
+  <Project Path="src/SentientArchitect.Data/SentientArchitect.Data.csproj" />
+  <Project Path="src/SentientArchitect.Domain/SentientArchitect.Domain.csproj" />
+  <Project Path="src/SentientArchitect.Infrastructure/SentientArchitect.Infrastructure.csproj" />
+  <Project Path="tests/SentientArchitect.UnitTests/SentientArchitect.UnitTests.csproj" />
+  <Project Path="tests/SentientArchitect.IntegrationTests/SentientArchitect.IntegrationTests.csproj" />
+</Solution>
