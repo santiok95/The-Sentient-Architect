@@ -27,12 +27,16 @@ public class IngestKnowledgeUseCase(
         if (validationErrors.Count > 0)
             return Result<IngestKnowledgeResponse>.Failure(validationErrors);
 
-        // 2. Create entity and mark as processing
+        // 2. Sanitize content before persisting or embedding
+        var sanitizedTitle   = PromptInjectionSanitizer.Sanitize(request.Title);
+        var sanitizedContent = PromptInjectionSanitizer.Sanitize(request.OriginalContent);
+
+        // 4. Create entity and mark as processing
         var item = new KnowledgeItem(
             request.UserId,
             request.TenantId,
-            request.Title,
-            request.OriginalContent,
+            sanitizedTitle,
+            sanitizedContent,
             request.Type,
             request.SourceUrl);
 

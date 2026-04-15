@@ -62,7 +62,10 @@ public sealed class SearchPlugin(
             {
                 if (!searchLines.Any(l => l.Contains(m.Title)))
                 {
-                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {m.OriginalContent}");
+                    var preview = m.OriginalContent.Length > 800
+                        ? string.Concat(m.OriginalContent.AsSpan(0, 800), "…")
+                        : m.OriginalContent;
+                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {preview}");
                 }
             }
         }
