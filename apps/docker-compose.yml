@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: SentientArchitectDb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d SentientArchitectDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PORT: 8080
+    restart: unless-stopped
+    ports:
+      - "5291:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      PORT: 8080
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=SentientArchitectDb;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: SentientArchitect
+      Jwt__Audience: SentientArchitect
+      Jwt__ExpiresInDays: 7
+      Seeder__AdminEmail: ${ADMIN_EMAIL}
+      Seeder__AdminPassword: ${ADMIN_PASSWORD}
+      AI__Anthropic__ApiKey: ${ANTHROPIC_API_KEY}
+      AI__Anthropic__ChatModel: ${ANTHROPIC_CHAT_MODEL:-claude-haiku-4-5-20251001}
+      AI__OpenAI__ApiKey: ${OPENAI_API_KEY}
+      AI__OpenAI__EmbeddingModel: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5291}
+        NEXT_PUBLIC_API_MOCK: ${NEXT_PUBLIC_API_MOCK:-false}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
