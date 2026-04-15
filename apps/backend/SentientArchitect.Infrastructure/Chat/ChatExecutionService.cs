@@ -51,7 +51,10 @@ public sealed class ChatExecutionService(
           in the user's actual analyzed repositories
         - Trends-GetRelevantTrends: Get technology trends relevant to a given stack or keywords.
           Use this when the user asks about modernization, trends, or when you want to suggest
-          concrete improvement opportunities backed by real ecosystem data.
+          concrete improvement opportunities backed by real ecosystem data. ALSO use this when
+          the user asks about tools, libraries, or alternatives to well-known tools
+          (e.g. "alternatives to Postman", "what testing tools exist", "what is trending in X")
+          — the radar may have exactly what they are looking for.
 
         MANDATORY RULES — never violate these:
         1. ALWAYS call Profile-GetUserProfile before giving any recommendation.
