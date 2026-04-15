@@ -68,11 +68,10 @@ using (var scope = app.Services.CreateScope())
 }
 await InfrastructureServiceExtensions.SeedAsync(app.Services);
 
-if (app.Environment.IsDevelopment())
-{
+
     app.MapOpenApi();
     app.MapScalarApiReference();
-}
+
 
 app.UseCors();
 app.UseExceptionHandler();
