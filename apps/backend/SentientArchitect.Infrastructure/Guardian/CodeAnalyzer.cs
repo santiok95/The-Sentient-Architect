@@ -42,7 +42,10 @@ public sealed class CodeAnalyzer(
             await reporter.ReportProgressAsync(repositoryInfoId, 5, "Iniciando análisis...", ct);
 
             // Clone repository
-            clonePath = Path.Combine(Path.GetTempPath(), "sentient-repos", repositoryInfoId.ToString());
+            // NOTE: Do NOT use Path.GetTempPath() ("/tmp" on Linux) — the path would match
+            // the "/tmp/" exclusion segment in IsAnalyzableFile() and zero files would be scanned.
+            var cloneBase = Path.Combine(AppContext.BaseDirectory, "sentient-repos");
+            clonePath = Path.Combine(cloneBase, repositoryInfoId.ToString());
             if (Directory.Exists(clonePath))
                 DeleteDirectory(clonePath);
 
@@ -959,14 +962,10 @@ public sealed class CodeAnalyzer(
     /// </summary>
     private static bool IsAnalyzableFile(string filePath)
     {
-        // NOTE: do NOT add \temp\ or \Temp\ — the clone root itself lives under the system Temp folder
-        // (e.g. C:\Users\...\AppData\Local\Temp\sentient-repos\{guid}\). Excluding \temp\ would
-        // make every file in every cloned repo invisible to the scanner.
         var segments = new[]
         {
             @"\obj\",   "/obj/",
             @"\bin\",   "/bin/",
-            @"\tmp\",   "/tmp/",   // repo-internal tmp folders only (not the system Temp root)
             @"\.git\",  "/.git/",
             @"\node_modules\", "/node_modules/",
             @"\packages\",     "/packages/",
