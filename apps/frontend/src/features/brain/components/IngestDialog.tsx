@@ -83,7 +83,7 @@ export function IngestDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Ingestar conocimiento</DialogTitle>
           <DialogDescription>
@@ -91,7 +91,8 @@ export function IngestDialog({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit((data) => execute(data))} className="space-y-4">
+        <form onSubmit={form.handleSubmit((data) => execute(data))} className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="title">Título *</Label>
@@ -147,7 +148,7 @@ export function IngestDialog({ open, onOpenChange }: Props) {
               id="content"
               rows={5}
               placeholder="Pega el contenido del artículo o notas aquí..."
-              className="resize-none"
+              className="resize-y"
               {...form.register('content')}
             />
           </div>
@@ -185,7 +186,9 @@ export function IngestDialog({ open, onOpenChange }: Props) {
             )}
           </div>
 
-          <DialogFooter>
+        </div>
+
+          <DialogFooter className="pt-4">
             <Button
               type="button"
               variant="outline"
