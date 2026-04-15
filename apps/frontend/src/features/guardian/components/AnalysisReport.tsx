@@ -53,14 +53,15 @@ const SEVERITY_CONFIG: Record<
 
 interface Props {
   repositoryId: string
+  isAnalyzing?: boolean
   onReanalyze?: () => void
 }
 
-export function AnalysisReport({ repositoryId, onReanalyze }: Props) {
+export function AnalysisReport({ repositoryId, isAnalyzing = false, onReanalyze }: Props) {
   const queryClient = useQueryClient()
   const { data: analysis, isLoading: loadingAnalysis } = useRepositoryAnalysis(repositoryId)
-  // Use the most recent COMPLETED report — otherwise a new Processing report (0 findings)
-  // from a re-analyze would replace the previous results before the new run finishes.
+  // Always use the most recent COMPLETED report so that a re-analysis in progress
+  // doesn't wipe out the previous results while the new run is still running.
   const latestReport = analysis?.reports.find(r => r.status === 'Completed')
   const { data: findingsData, isLoading: loadingFindings } = useFindings(
     repositoryId,
@@ -89,7 +90,17 @@ export function AnalysisReport({ repositoryId, onReanalyze }: Props) {
     )
   }
 
+  // While a re-analysis is running, show previous results with an overlay indicator.
+  // When there are no results at all yet (first analysis in progress), show a waiting state.
   if (!analysis || !latestReport) {
+    if (isAnalyzing) {
+      return (
+        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Analizando repositorio…
+        </div>
+      )
+    }
     return (
       <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
         Sin análisis disponible para este repositorio

@@ -99,6 +99,7 @@ export function GuardianView() {
     setAnalyzingRepoId(null)
     queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.list() })
     queryClient.invalidateQueries({ queryKey: REPOSITORY_KEYS.analysis(activeRepoId ?? '') })
+    queryClient.invalidateQueries({ queryKey: ['repositories', 'findings'] })
   }
 
   return (
@@ -144,12 +145,13 @@ export function GuardianView() {
           isAnalyzing={isAnalyzing}
           onComplete={handleAnalysisComplete}
         />
-        {activeRepoId && activeRepo?.processingStatus === 'Completed' ? (
+        {activeRepoId ? (
           <AnalysisReport
             repositoryId={activeRepoId}
+            isAnalyzing={isAnalyzing}
             onReanalyze={() => setAnalyzingRepoId(activeRepoId)}
           />
-        ) : !activeRepoId ? (
+        ) : (
           <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
             <div className="text-center">
               <GitFork className="mx-auto h-10 w-10 text-muted-foreground/30" />
@@ -158,7 +160,7 @@ export function GuardianView() {
               </p>
             </div>
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   )
