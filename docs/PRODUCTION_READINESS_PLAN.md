@@ -256,6 +256,73 @@ public void AddMessage(ConversationMessage msg) => _messages.Add(msg);
 
 ---
 
+### Consultant — Modo modernización guiado por Trends + About.md del repo
+
+**Contexto:** Cuando el usuario analiza un proyecto interno con Code Guardian y luego consulta al Consultant en modo Generic/StackBound, el agente no tiene visión de "qué hay moderno en el ecosistema que le podría servir a este proyecto". Esta feature lo conecta.
+
+**Flujo completo:**
+
+```
+1. Usuario sube repo → Code Guardian analiza → genera AnalysisReport con findings y patrones detectados
+2. En la raíz del repo existe un ABOUT.md opcional → el analyzer lo detecta y persiste su contenido
+   en RepositoryInfo.AboutContent (campo nuevo)
+3. Usuario abre conversación con el Consultant en modo Generic o StackBound sobre ese repo
+4. El Consultant invoca automáticamente:
+   a. RepositoryContextPlugin → patrones actuales + findings del análisis
+   b. TrendsPlugin (nuevo) → top trends Rising por categoría relevante al stack detectado
+   c. AboutPlugin (nuevo, o extensión de RepositoryContextPlugin) → intención del usuario para el proyecto
+5. Con ese contexto combinado, el LLM genera:
+   - Qué tecnologías modernas del radar aplican a este proyecto y por qué
+   - Por cada sugerencia: referencia al trend concreto (nombre, score, GitHub URL si existe)
+   - Recomendaciones alineadas con la intención del ABOUT.md
+   - Sin contradecir los patrones detectados en el análisis (si el proyecto usa EF Core, no sugerir Dapper como reemplazo)
+```
+
+**Piezas a implementar:**
+
+1. **`RepositoryInfo.AboutContent`** — nuevo campo `string?` en la entidad.
+   - `CodeAnalyzer` lo lee del archivo `ABOUT.md` en la raíz del repo clonado (si existe).
+   - Se persiste junto con el resto del análisis.
+   - Migración EF Core.
+
+2. **`TrendsPlugin`** — nuevo `[KernelFunction]` en Infrastructure:
+   ```
+   GetRelevantTrendsAsync(string[] stackKeywords, int maxResults = 10)
+   ```
+   - Query a `db.TechnologyTrends` filtrando `Direction = Rising || Stable` con `RelevanceScore > 0.5`
+   - Filtra por categorías relevantes al stack (ej: si el stack tiene ".NET" → Framework, Library, Pattern, Architecture)
+   - Retorna: nombre, categoría, dirección, score, descripción, GitHub URL, sources
+   - Registrado en `ConsultantAgentFactory`
+
+3. **`RepositoryContextPlugin`** — extender `GetUserRepositoriesContextAsync`:
+   - Si el repo tiene `AboutContent`, incluirlo en el contexto con encabezado claro:
+     ```
+     ## Intención del proyecto (definida por el autor en ABOUT.md)
+     {aboutContent}
+     ```
+
+4. **Prompt del Consultant** — agregar regla en `ConsultantSystemPrompt`:
+   - En modo Generic/StackBound con contexto de repo: invocar `TrendsPlugin` y cruzar con `AboutContent`
+   - Formato de respuesta esperado: sección "Oportunidades de modernización" con bullets
+     `[Trend: {nombre} ↑ {score}] — {por qué aplica} → {cómo implementarlo en este stack}`
+
+**Lo que NO debe hacer:**
+- No sugerir trends que contradigan patrones establecidos en RepoBound mode
+- No inventar trends — solo los que existen en `db.TechnologyTrends` (populados por el scanner real)
+- No ignorar el ABOUT.md si existe — es la voz del autor sobre la dirección del proyecto
+
+**Archivos afectados:**
+- `Domain/Entities/RepositoryInfo.cs` — agregar `AboutContent`
+- `Infrastructure/Guardian/CodeAnalyzer.cs` — leer `ABOUT.md` durante el análisis
+- `Infrastructure/Agents/Consultant/TrendsPlugin.cs` — nuevo
+- `Infrastructure/Agents/Consultant/RepositoryContextPlugin.cs` — incluir `AboutContent`
+- `Infrastructure/InfrastructureServiceExtensions.cs` — registrar `TrendsPlugin`
+- `Infrastructure/Agents/ConsultantAgentFactory.cs` — agregar plugin al kernel
+- `Infrastructure/Chat/ChatExecutionService.cs` — instrucción en `ConsultantSystemPrompt`
+- Nueva migración EF Core
+
+---
+
 ## BLOQUE 4 — Deuda arquitectónica
 
 - [ ] **Reemplazar keyword fallback en memoria en `SearchPlugin`**
