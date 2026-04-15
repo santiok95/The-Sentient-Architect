@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using SentientArchitect.API.Common.Endpoints;
+using SentientArchitect.Data;
 using SentientArchitect.API.Hubs;
 using SentientArchitect.API.Middleware;
 using SentientArchitect.API.Services;
@@ -58,7 +60,12 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-// Seed roles + admin user
+// Apply pending migrations and seed roles + admin user
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationContext>();
+    await db.Database.MigrateAsync();
+}
 await InfrastructureServiceExtensions.SeedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
