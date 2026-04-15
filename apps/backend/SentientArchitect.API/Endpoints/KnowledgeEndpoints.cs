@@ -142,9 +142,11 @@ public class KnowledgeEndpoints : IEndpointModule
         group.MapDelete("/{id:guid}", async (
             [FromRoute] Guid id,
             [FromServices] DeleteKnowledgeItemUseCase useCase,
+            [FromServices] IUserAccessor userAccessor,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new DeleteKnowledgeItemRequest(id), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new DeleteKnowledgeItemRequest(id, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("DeleteKnowledge")
