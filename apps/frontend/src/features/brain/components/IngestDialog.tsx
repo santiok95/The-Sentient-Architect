@@ -81,8 +81,16 @@ export function IngestDialog({ open, onOpenChange }: Props) {
     form.setValue('tags', tags.filter((t) => t !== tag))
   }
 
+  function handleOpenChange(next: boolean) {
+    if (!next) {
+      form.reset()
+      setTagInput('')
+    }
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-xl flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Ingestar conocimiento</DialogTitle>
@@ -192,7 +200,7 @@ export function IngestDialog({ open, onOpenChange }: Props) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={isPending}
             >
               Cancelar

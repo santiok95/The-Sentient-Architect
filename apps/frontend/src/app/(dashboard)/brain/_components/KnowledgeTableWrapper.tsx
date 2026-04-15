@@ -25,17 +25,21 @@ const TYPE_OPTIONS = [
 
 export function KnowledgeTableWrapper() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [activeTag, setActiveTag] = useState('')
   const [typeSelect, setTypeSelect] = useState('all')
   const [ingestOpen, setIngestOpen] = useState(false)
 
   // 'all' sentinel maps to empty string (no filter sent to the API)
   const typeFilter = typeSelect === 'all' ? '' : typeSelect
 
+  // Tag filter: pass the tag as the search term so the API filters by it
+  const effectiveSearch = activeTag ? activeTag : searchTerm
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchBar onSearch={setSearchTerm} />
+        <SearchBar onSearch={setSearchTerm} activeTag={activeTag} onTagChange={setActiveTag} />
         <div className="flex items-center gap-2 shrink-0">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
           <Select value={typeSelect} onValueChange={(v) => setTypeSelect(v ?? 'all')}>
@@ -61,7 +65,7 @@ export function KnowledgeTableWrapper() {
       <IngestProgress />
 
       {/* Table */}
-      <KnowledgeTable searchTerm={searchTerm} typeFilter={typeFilter} />
+      <KnowledgeTable searchTerm={effectiveSearch} typeFilter={typeFilter} />
 
       {/* Dialog */}
       <IngestDialog open={ingestOpen} onOpenChange={setIngestOpen} />
