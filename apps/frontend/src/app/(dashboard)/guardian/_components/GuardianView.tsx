@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { GitFork, Clock, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { SubmitRepoForm } from '@/features/guardian/components/SubmitRepoForm'
 import { AnalysisReport } from '@/features/guardian/components/AnalysisReport'
@@ -104,15 +105,15 @@ export function GuardianView() {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_1fr]">
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4 min-h-0">
         <SubmitRepoForm
           onSubmitted={(repoId) => {
             setActiveRepoId(repoId)
             setAnalyzingRepoId(repoId)
           }}
         />
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-0.5">
+        <div className="flex flex-col gap-2 min-h-0">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-0.5 shrink-0">
             Repositorios analizados
           </p>
           {isLoading
@@ -128,14 +129,20 @@ export function GuardianView() {
                     </div>
                   </div>
                 )
-              : repos.map((repo) => (
-                  <RepoCard
-                    key={repo.id}
-                    repo={repo}
-                    isActive={activeRepoId === repo.id}
-                    onClick={() => setActiveRepoId(repo.id)}
-                  />
-                ))}
+              : (
+                  <ScrollArea className="max-h-[calc(100vh-420px)] pr-1">
+                    <div className="space-y-2">
+                      {repos.map((repo) => (
+                        <RepoCard
+                          key={repo.id}
+                          repo={repo}
+                          isActive={activeRepoId === repo.id}
+                          onClick={() => setActiveRepoId(repo.id)}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
         </div>
       </div>
 

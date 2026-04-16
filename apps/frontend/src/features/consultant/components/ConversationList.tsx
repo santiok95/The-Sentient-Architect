@@ -120,6 +120,32 @@ function ConversationItem({
   )
 }
 
+// Groups repos by URL — one entry per URL, carrying all trust levels available.
+// Uses the Internal variant's id if available (more thorough analysis context).
+interface DeduplicatedRepo {
+  id: string
+  gitUrl: string
+  trustLevels: string[]
+}
+
+function deduplicateRepos(repos: RepositorySummary[]): DeduplicatedRepo[] {
+  const completed = repos.filter((r) => r.processingStatus === 'Completed')
+  const byUrl = new Map<string, RepositorySummary[]>()
+  for (const repo of completed) {
+    const existing = byUrl.get(repo.gitUrl) ?? []
+    byUrl.set(repo.gitUrl, [...existing, repo])
+  }
+  return Array.from(byUrl.entries()).map(([gitUrl, variants]) => {
+    const internal = variants.find((r) => r.trustLevel === 'Internal')
+    const preferred = internal ?? variants[0]
+    return {
+      id: preferred.id,
+      gitUrl,
+      trustLevels: variants.map((r) => r.trustLevel),
+    }
+  })
+}
+
 function RepoPicker({
   repos,
   selectedId,
@@ -135,7 +161,7 @@ function RepoPicker({
   onBack: () => void
   isCreating: boolean
 }) {
-  const completed = repos.filter((r) => r.processingStatus === 'Completed')
+  const deduplicated = deduplicateRepos(repos)
 
   return (
     <div className="flex flex-col gap-2 px-3 py-2">
@@ -152,13 +178,13 @@ function RepoPicker({
         </p>
       </div>
 
-      {completed.length === 0 ? (
+      {deduplicated.length === 0 ? (
         <p className="text-xs text-muted-foreground px-1 py-2">
           No hay repositorios analizados todavía. Subí uno en Guardian primero.
         </p>
       ) : (
         <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-          {completed.map((repo) => (
+          {deduplicated.map((repo) => (
             <button
               key={repo.id}
               onClick={() => onSelect(repo.id)}
@@ -171,6 +197,21 @@ function RepoPicker({
             >
               <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="flex-1 truncate font-mono">{repoShortName(repo.gitUrl)}</span>
+              <span className="flex gap-1 shrink-0">
+                {repo.trustLevels.map((t) => (
+                  <span
+                    key={t}
+                    className={cn(
+                      'rounded px-1 py-0.5 text-[10px] font-medium border',
+                      t === 'Internal'
+                        ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                        : 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+                    )}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </span>
               {selectedId === repo.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
             </button>
           ))}

@@ -40,6 +40,9 @@ public class Conversation : BaseEntity
     public string? DetectedStack { get; private set; }
     public string? DetectedScope { get; private set; }  // "NewApp" | "ExistingRepo" | "Generic"
 
+    // Tracks when the last compaction occurred so the threshold counts only post-compaction messages
+    public DateTime? LastCompactedAt { get; private set; }
+
     public ICollection<ConversationMessage> Messages { get; private set; }
 
     public void AddMessage(ConversationMessage message)
@@ -53,6 +56,7 @@ public class Conversation : BaseEntity
         Summary = summary;
         TokenCount = newTokenCount;
         Status = ConversationStatus.Compacted;
+        LastCompactedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 
