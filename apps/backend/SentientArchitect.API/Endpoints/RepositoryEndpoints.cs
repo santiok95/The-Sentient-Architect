@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
+using SentientArchitect.Application.Features.Repositories.DeleteRepository;
 using SentientArchitect.Application.Features.Repositories.GetAnalysisReport;
 using SentientArchitect.Application.Features.Repositories.GetRepositories;
 using SentientArchitect.Application.Features.Repositories.GetRepositoryAnalysis;
@@ -85,6 +86,19 @@ public class RepositoryEndpoints : IEndpointModule
         group.MapPost("/{id:guid}/analyze", TriggerAnalysisAsync)
             .WithName("TriggerAnalysis")
             .WithOpenApi();
+
+        group.MapDelete("/{id:guid}", async (
+            [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] DeleteRepositoryUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new DeleteRepositoryRequest(id, userId), ct);
+            return result.ToHttpResult();
+        })
+        .WithName("DeleteRepository")
+        .WithOpenApi();
     }
 
     private static IResult TriggerAnalysisAsync(
