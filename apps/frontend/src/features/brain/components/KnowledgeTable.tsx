@@ -114,7 +114,7 @@ function KnowledgeRowActions({ item }: { item: KnowledgeItem }) {
 
 export function KnowledgeTable({ searchTerm = '', typeFilter = '' }: Props) {
   const [page, setPage] = useState(1)
-  const PAGE_SIZE = 20
+  const PAGE_SIZE = 10
 
   // Reset to page 1 whenever filters change
   useEffect(() => { setPage(1) }, [searchTerm, typeFilter])

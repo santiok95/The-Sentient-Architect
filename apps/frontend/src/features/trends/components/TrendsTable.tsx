@@ -159,7 +159,7 @@ function SkeletonRow() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 
 export function TrendsTable() {
   const [categoryFilter, setCategoryFilter] = useState<string>('')
