@@ -3,7 +3,6 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.SemanticKernel;
 using SentientArchitect.Application.Common.Interfaces;
-using SentientArchitect.Domain.Entities;
 using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Infrastructure.Agents.Consultant;
@@ -49,6 +48,31 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
         var analyzed = repos.Where(r => r.LastAnalyzedAt.HasValue).ToList();
         var pending  = repos.Where(r => !r.LastAnalyzedAt.HasValue).ToList();
 
+        // Load all reports and findings in two batch queries — avoids N+1 per repo
+        var repoIds = analyzed.Select(r => r.Id).ToList();
+
+        var latestReports = await db.AnalysisReports
+            .AsNoTracking()
+            .Where(r => repoIds.Contains(r.RepositoryInfoId) && r.Status == AnalysisStatus.Completed)
+            .OrderByDescending(r => r.CompletedAt)
+            .ToListAsync(cancellationToken);
+
+        // Keep only the most recent completed report per repo
+        var reportByRepo = latestReports
+            .GroupBy(r => r.RepositoryInfoId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var reportIds = reportByRepo.Values.Select(r => r.Id).ToList();
+
+        var allFindings = await db.AnalysisFindings
+            .AsNoTracking()
+            .Where(f => reportIds.Contains(f.AnalysisReportId))
+            .ToListAsync(cancellationToken);
+
+        var findingsByReport = allFindings
+            .GroupBy(f => f.AnalysisReportId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var sb = new StringBuilder();
         sb.AppendLine(
             $"CODEBASE CONTEXT — {repos.Count} repositor{(repos.Count == 1 ? "y" : "ies")} on record " +
@@ -74,24 +98,15 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
                 sb.AppendLine("↑ Usá esta información para alinear tus recomendaciones con la visión del autor.");
             }
 
-            var latestReport = await db.AnalysisReports
-                .AsNoTracking()
-                .Where(r => r.RepositoryInfoId == repo.Id && r.Status == AnalysisStatus.Completed)
-                .OrderByDescending(r => r.CompletedAt)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (latestReport is null)
+            if (!reportByRepo.TryGetValue(repo.Id, out var latestReport))
                 continue;
 
             if (!string.IsNullOrWhiteSpace(latestReport.Summary))
                 sb.AppendLine($"- Analysis summary: {latestReport.Summary}");
 
-            var allFindings = await db.AnalysisFindings
-                .AsNoTracking()
-                .Where(f => f.AnalysisReportId == latestReport.Id)
-                .ToListAsync(cancellationToken);
+            var repoFindings = findingsByReport.GetValueOrDefault(latestReport.Id, []);
 
-            var architectureFindings = allFindings.Where(f => f.Category == "Architecture").ToList();
+            var architectureFindings = repoFindings.Where(f => f.Category == "Architecture").ToList();
             if (architectureFindings.Count > 0)
             {
                 sb.AppendLine();
@@ -100,8 +115,7 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
                     sb.AppendLine($"  - {finding.Message}");
             }
 
-            // Surface High and Critical findings so the consultant can reason about real issues
-            var importantFindings = allFindings
+            var importantFindings = repoFindings
                 .Where(f => f.Severity == FindingSeverity.Critical || f.Severity == FindingSeverity.High)
                 .OrderBy(f => f.Severity)
                 .ToList();
@@ -118,7 +132,7 @@ public sealed class RepositoryContextPlugin(IApplicationDbContext db)
                 }
             }
 
-            var medLowCount = allFindings.Count(f => f.Severity == FindingSeverity.Medium || f.Severity == FindingSeverity.Low);
+            var medLowCount = repoFindings.Count(f => f.Severity == FindingSeverity.Medium || f.Severity == FindingSeverity.Low);
             if (medLowCount > 0)
                 sb.AppendLine($"- Additionally {medLowCount} medium/low findings (ask user if they want detail).");
         }

@@ -11,37 +11,49 @@ public class GetTrendsUseCase(IApplicationDbContext db)
         GetTrendsRequest request,
         CancellationToken ct = default)
     {
+        // Map TrendDirection to frontend TractionLevel
+        static string ToTraction(TrendDirection d) => d switch
+        {
+            TrendDirection.Rising    => "Growing",
+            TrendDirection.Stable    => "Mainstream",
+            TrendDirection.Declining => "Declining",
+            _                        => "Mainstream",
+        };
+
+        // Reverse map: traction label → direction enum (keeps filter in DB, not in-memory)
+        static TrendDirection? ToDirection(string traction) => traction.ToLowerInvariant() switch
+        {
+            "growing"    => TrendDirection.Rising,
+            "mainstream" => TrendDirection.Stable,
+            "declining"  => TrendDirection.Declining,
+            _            => null,
+        };
+
         var baseQuery = db.TechnologyTrends.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.Category) &&
             Enum.TryParse<TrendCategory>(request.Category, ignoreCase: true, out var cat))
             baseQuery = baseQuery.Where(t => t.Category == cat);
 
-        var totalCount = await baseQuery.CountAsync(ct);
+        if (!string.IsNullOrWhiteSpace(request.Traction))
+        {
+            var dir = ToDirection(request.Traction);
+            if (dir.HasValue)
+                baseQuery = baseQuery.Where(t => t.Direction == dir.Value);
+        }
 
-        var query = baseQuery.OrderByDescending(t => t.RelevanceScore);
+        var totalCount = await baseQuery.CountAsync(ct);
 
         var page     = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
 
-        var trends = await query
+        var trends = await baseQuery
+            .OrderByDescending(t => t.RelevanceScore)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
-        // Map TrendDirection to frontend TractionLevel
-        static string ToTraction(TrendDirection d) => d switch
-        {
-            TrendDirection.Rising   => "Growing",
-            TrendDirection.Stable   => "Mainstream",
-            TrendDirection.Declining => "Declining",
-            _                       => "Mainstream",
-        };
-
-        // Apply traction filter in-memory after DB query (enum mapping makes EF translation complex)
-        var filtered = string.IsNullOrWhiteSpace(request.Traction)
-            ? trends
-            : trends.Where(t => ToTraction(t.Direction).Equals(request.Traction, StringComparison.OrdinalIgnoreCase)).ToList();
+        var filtered = trends;
 
         var items = filtered.Select(t => new TrendItem(
             t.Id,

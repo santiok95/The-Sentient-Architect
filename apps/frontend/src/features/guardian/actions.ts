@@ -40,6 +40,27 @@ export const submitRepoAction = authedActionClient
     return created
   })
 
+// ─── Delete Repository ────────────────────────────────────────────────────────
+
+const deleteRepoSchema = z.object({ repositoryId: z.string().uuid() })
+
+export const deleteRepoAction = authedActionClient
+  .schema(deleteRepoSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const res = await fetch(
+      `${BASE_URL}/api/v1/repositories/${parsedInput.repositoryId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${ctx.token}` },
+      },
+    )
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail ?? 'Error al eliminar el repositorio')
+    }
+    return { deleted: true }
+  })
+
 // ─── Reanalyze Repository ─────────────────────────────────────────────────────
 
 const reanalyzeSchema = z.object({ repositoryId: z.string().uuid() })

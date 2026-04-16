@@ -155,6 +155,46 @@ _None yet — will be populated during implementation._
 
 ---
 
+## Tech Audit Findings — 2026-04-16
+
+Auditoría completa realizada sobre el codebase. Score general: **7.8/10**.
+
+### Resueltos en esta sesión ✅
+
+| Finding | Severidad | Resolución |
+|---------|-----------|------------|
+| N+1 en `RepositoryContextPlugin` — queries por repo dentro de loop | Crítico | Batch query de reports + findings con `GroupBy` + diccionarios. `RepositoryContextPlugin.cs` |
+| Compaction loop perpetuo — threshold contaba todos los mensajes históricos | Alto | Agregado `LastCompactedAt` en `Conversation`. El threshold ahora cuenta solo mensajes post-compactación. `Conversation.cs`, `ExecuteChatUseCase.cs`, migración `AddConversationLastCompactedAt` |
+| Validación duplicados Guardian — mismo URL + mismo Trust permitido | Alto | `AnyAsync()` antes del `Add()` en `SubmitRepositoryUseCase.cs`. Devuelve `ErrorType.Conflict`. |
+| Lista repos Guardian crece infinita sin scroll | UX | `ScrollArea` con `max-h-[calc(100vh-420px)]` en `GuardianView.tsx` |
+| Repos duplicados en Consultant picker (Internal + External = 2 entradas) | UX | `deduplicateRepos()` en `ConversationList.tsx` — una entrada por URL con badges de trust disponibles |
+
+### Pendientes — Pre-producción con usuarios externos 🔴
+
+| Finding | Severidad | Descripción |
+|---------|-----------|-------------|
+| JWT en localStorage + cookie sin `httpOnly` | Crítico | Token vulnerable a XSS. Requiere que el backend setee la cookie `httpOnly` en el response de login. Frontend no debe tocar el bearer token. `lib/auth.ts:30,56` |
+| Sin refresh token rotation | Alto | El `refreshToken` se guarda pero nunca se usa. Cuando el JWT vence, el usuario recibe 401 silencioso hasta logout manual. Requiere endpoint de renovación + `accessTokenFactory` actualizado en `lib/signalr.ts`. |
+
+### Pendientes — Pre-escala horizontal 🟠
+
+| Finding | Severidad | Descripción |
+|---------|-----------|-------------|
+| SignalR sin Redis backplane | Alto | Con más de una instancia del backend, los eventos WebSocket no cruzan procesos. Ver sección `Future Scalability (Phase X)` más abajo. |
+| Paginación en `GetRepositoriesUseCase` | Medio | Trae todos los repos + reports del usuario en una query. Misma estructura que Brain/Trends ya tiene. `GetRepositoriesUseCase.cs:14` |
+
+### Deuda técnica tolerable 🟡
+
+| Finding | Severidad | Descripción |
+|---------|-----------|-------------|
+| `ErrorType.Validation` en `Result.SuccessWith` | Bajo | Semánticamente incorrecto — un resultado exitoso no debería llevar `ErrorType.Validation`. Agregar `ErrorType.None = 0`. `Result.cs:57` |
+| `LocalPath` persiste en DB sin cleanup | Bajo | Si el proceso muere durante un análisis, queda un path huérfano. Limpiar en startup o al inicio del siguiente análisis del mismo repo. `RepositoryInfo.cs` |
+| Prompt del Consultant partido en dos lugares | Bajo | `ConsultantSystemPrompt` const + `contextMessage` dinámico en el mismo método. Dificulta el mantenimiento cuando el prompt crezca. Considerar cargar desde recurso embebido. `ChatExecutionService.cs` |
+| Sin traceabilidad de decisiones del agente | Bajo | No hay logging de qué plugins se llamaron, qué datos devolvieron ni cuánto tardó cada llamada. Bloquea el debugging en producción. |
+| Token tracking por carácter (≈4 chars/token) | Bajo | Margen de error del 30-40% para código técnico. El dashboard de cuota será impreciso. Considerar usar la metadata real de tokens de la API. |
+
+---
+
 ## Future Scalability (Phase X) — Redis Topology
 
 Como plan de arquitectura comprobada a futuro, cuando la plataforma alcance la necesidad de escalar horizontalmente (múltiples nodos de backend) o maneje picos severos de usuarios concurrentes, se agregará un tier de **Redis (In-Memory Data Store)**. 

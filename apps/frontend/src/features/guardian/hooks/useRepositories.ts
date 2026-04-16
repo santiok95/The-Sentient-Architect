@@ -105,6 +105,15 @@ export function useRepositoryAnalysis(repositoryId: string | null) {
       return res.data
     },
     enabled: !!repositoryId,
+    // Poll every 4 s while any report is still in progress — covers the case
+    // where the SignalR ReceiveComplete event is missed (network drop, page reload, etc.)
+    refetchInterval: (query) => {
+      const reports = query.state.data?.reports ?? []
+      const hasPending = reports.some(
+        (r) => r.status === 'InProgress' || r.status === 'Pending',
+      )
+      return hasPending ? 4000 : false
+    },
   })
 }
 

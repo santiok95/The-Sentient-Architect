@@ -59,7 +59,7 @@ interface Props {
 
 export function AnalysisReport({ repositoryId, isAnalyzing = false, onReanalyze }: Props) {
   const queryClient = useQueryClient()
-  const { data: analysis, isLoading: loadingAnalysis } = useRepositoryAnalysis(repositoryId)
+  const { data: analysis, isLoading: loadingAnalysis, isFetching } = useRepositoryAnalysis(repositoryId)
   // Always use the most recent COMPLETED report so that a re-analysis in progress
   // doesn't wipe out the previous results while the new run is still running.
   const latestReport = analysis?.reports.find(r => r.status === 'Completed')
@@ -93,7 +93,7 @@ export function AnalysisReport({ repositoryId, isAnalyzing = false, onReanalyze 
   // While a re-analysis is running, show previous results with an overlay indicator.
   // When there are no results at all yet (first analysis in progress), show a waiting state.
   if (!analysis || !latestReport) {
-    if (isAnalyzing) {
+    if (isAnalyzing || isFetching) {
       return (
         <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />

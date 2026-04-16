@@ -49,7 +49,12 @@ public class ExecuteChatUseCase(
                 saveUserMessageResult.Errors,
                 saveUserMessageResult.ErrorType);
 
-        var shouldCompact = conversation.Messages.Count >= options.Value.CompactionThreshold;
+        // Count only messages since the last compaction to avoid perpetual re-compaction
+        var messagesForThreshold = conversation.LastCompactedAt.HasValue
+            ? conversation.Messages.Count(m => m.CreatedAt > conversation.LastCompactedAt.Value)
+            : conversation.Messages.Count;
+
+        var shouldCompact = messagesForThreshold >= options.Value.CompactionThreshold;
 
         var executionResult = await chatExecutionService.ExecuteAsync(
             new ChatExecutionRequest(
