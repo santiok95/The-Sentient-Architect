@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, Minus, ArrowUpRight, RefreshCw, Filter, Star, ExternalLink } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, ArrowUpRight, RefreshCw, Filter, Star, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -159,15 +159,24 @@ function SkeletonRow() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20
+
 export function TrendsTable() {
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [tractionFilter, setTractionFilter] = useState<string>('')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [page, setPage] = useState(1)
+
+  function resetPage() { setPage(1) }
 
   const { data, isLoading, refetch } = useTrends({
     category: categoryFilter || undefined,
     traction: tractionFilter || undefined,
+    page,
+    pageSize: PAGE_SIZE,
   })
+
+  const totalPages = data ? Math.ceil(data.totalCount / PAGE_SIZE) : 1
 
   const trends: Trend[] = data?.items ?? []
 
@@ -199,7 +208,7 @@ export function TrendsTable() {
           <span>Filtrar:</span>
         </div>
 
-        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v ?? '')}>
+        <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v ?? ''); resetPage() }}>
           <SelectTrigger className="h-8 w-[160px] text-xs font-mono">
             <SelectValue placeholder="Categoría" />
           </SelectTrigger>
@@ -213,7 +222,7 @@ export function TrendsTable() {
           </SelectContent>
         </Select>
 
-        <Select value={tractionFilter} onValueChange={(v) => setTractionFilter(v ?? '')}>
+        <Select value={tractionFilter} onValueChange={(v) => { setTractionFilter(v ?? ''); resetPage() }}>
           <SelectTrigger className="h-8 w-[160px] text-xs font-mono">
             <SelectValue placeholder="Tracción" />
           </SelectTrigger>
@@ -232,7 +241,7 @@ export function TrendsTable() {
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground"
-            onClick={() => { setCategoryFilter(''); setTractionFilter('') }}
+            onClick={() => { setCategoryFilter(''); setTractionFilter(''); resetPage() }}
           >
             Limpiar
           </Button>
@@ -296,6 +305,34 @@ export function TrendsTable() {
         </table>
       </div>
 
+      {/* Pagination footer */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground font-mono">
+            Página {page} de {totalPages} · {data?.totalCount} tecnologías
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
       {!isLoading && (
         <p className="text-xs text-muted-foreground font-mono">
           Actualizado: {data?.items?.[0]
