@@ -13,7 +13,7 @@
 
 > **Centralizá conocimiento. Auditá código. Decidí con evidencia. Todo desde un mismo lugar.**
 
-[🎬 Ver guía visual](./HOW-TO-USE.md) · [🏛️ Decisiones arquitectónicas](./docs/ARCHITECTURE_DECISIONS.md) · [📖 Contexto del proyecto](./docs/PROJECT_CONTEXT.md) · [🔌 API contracts](./docs/API_CONTRACTS.md)
+[🎬 Ver guía visual](./HOW-TO-USE.md) · [🏛️ Decisiones arquitectónicas](./docs/ARCHITECTURE_DECISIONS.md) · [📖 Contexto del proyecto](./docs/PROJECT_CONTEXT.md) · [🔌 API contracts](./docs/API_CONTRACTS.md) · [🧾 Audit agents](./.claude/agents/README.md)
 
 </div>
 
@@ -164,6 +164,10 @@ the-sentient-architect/
 ```
 
 ---
+
+## 🧾 Audit agents reutilizables
+
+Si querés correr revisiones estructuradas con prompts consistentes, tenés un registro liviano en [./.claude/agents/README.md](./.claude/agents/README.md). Incluye perfiles separados para frontend, backend, chatbot/prompts y un auditor jefe para síntesis ejecutiva.
 
 ## 🚀 Quickstart
 

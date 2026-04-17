@@ -52,10 +52,12 @@ public class RepositoryEndpoints : IEndpointModule
 
         group.MapGet("/{id:guid}/analysis", async (
             [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
             [FromServices] GetRepositoryAnalysisUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new GetRepositoryAnalysisRequest(id), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetRepositoryAnalysisRequest(id, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("GetRepositoryAnalysis")
@@ -63,10 +65,12 @@ public class RepositoryEndpoints : IEndpointModule
 
         group.MapGet("/{id:guid}/reports", async (
             [FromRoute] Guid id,
+            [FromServices] IUserAccessor userAccessor,
             [FromServices] GetRepositoryReportsUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new GetRepositoryReportsRequest(id), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetRepositoryReportsRequest(id, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("GetRepositoryReports")
@@ -74,10 +78,12 @@ public class RepositoryEndpoints : IEndpointModule
 
         group.MapGet("/reports/{reportId:guid}", async (
             [FromRoute] Guid reportId,
+            [FromServices] IUserAccessor userAccessor,
             [FromServices] GetAnalysisReportUseCase useCase,
             CancellationToken ct) =>
         {
-            var result = await useCase.ExecuteAsync(new GetAnalysisReportRequest(reportId), ct);
+            var userId = userAccessor.GetCurrentUserId();
+            var result = await useCase.ExecuteAsync(new GetAnalysisReportRequest(reportId, userId), ct);
             return result.ToHttpResult();
         })
         .WithName("GetAnalysisReport")

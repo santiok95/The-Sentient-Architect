@@ -5,7 +5,7 @@ using SentientArchitect.Domain.Enums;
 
 namespace SentientArchitect.Application.Features.Repositories.GetRepositoryAnalysis;
 
-public record GetRepositoryAnalysisRequest(Guid RepositoryId);
+public record GetRepositoryAnalysisRequest(Guid RepositoryId, Guid UserId);
 
 public record AnalysisReportSummary(
     Guid Id,
@@ -44,7 +44,9 @@ public class GetRepositoryAnalysisUseCase(IApplicationDbContext db)
             .Include(r => r.Reports)
                 .ThenInclude(rep => rep.Findings)
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == request.RepositoryId, ct);
+            .FirstOrDefaultAsync(
+                r => r.Id == request.RepositoryId && r.UserId == request.UserId,
+                ct);
 
         if (repo is null)
             return Result<GetRepositoryAnalysisResponse>.Failure(
