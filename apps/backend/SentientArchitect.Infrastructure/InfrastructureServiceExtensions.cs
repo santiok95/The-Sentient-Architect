@@ -92,6 +92,7 @@ public static class InfrastructureServiceExtensions
         services.AddHttpContextAccessor();
 
         // ── Identity services ────────────────────────────────────────────────
+        services.AddScoped<IAuthIdentityService, IdentityAuthService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IUserAccessor, UserAccessor>();
         services.AddScoped<IUserService, UserService>();

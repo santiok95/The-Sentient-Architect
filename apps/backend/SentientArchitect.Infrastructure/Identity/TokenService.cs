@@ -57,4 +57,55 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    public Guid? GetUserIdFromToken(string token, bool allowExpired = false)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        var handler = new JwtSecurityTokenHandler();
+
+        try
+        {
+            var principal = handler.ValidateToken(
+                token,
+                CreateValidationParameters(validateLifetime: !allowExpired),
+                out _);
+
+            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            return Guid.TryParse(sub, out var userId) ? userId : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public int GetAccessTokenLifetimeSeconds() =>
+        (int)TimeSpan.FromDays(GetExpiresDays()).TotalSeconds;
+
+    private TokenValidationParameters CreateValidationParameters(bool validateLifetime)
+    {
+        var issuer = configuration["Jwt:Issuer"] ?? "SentientArchitect";
+        var audience = configuration["Jwt:Audience"] ?? "SentientArchitect";
+
+        return new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(GetSigningKey())),
+            ValidateIssuer = true,
+            ValidIssuer = issuer,
+            ValidateAudience = true,
+            ValidAudience = audience,
+            ValidateLifetime = validateLifetime,
+            ClockSkew = TimeSpan.Zero,
+        };
+    }
+
+    private string GetSigningKey() =>
+        configuration["Jwt:Key"]
+            ?? throw new InvalidOperationException("Jwt:Key is not configured.");
+
+    private int GetExpiresDays() =>
+        int.TryParse(configuration["Jwt:ExpiresInDays"], out var days) ? days : 7;
 }

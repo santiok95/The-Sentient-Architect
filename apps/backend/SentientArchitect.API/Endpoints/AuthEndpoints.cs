@@ -1,12 +1,11 @@
-using System.IdentityModel.Tokens.Jwt;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using SentientArchitect.API.Common.Endpoints;
-using SentientArchitect.API.Extensions;
 using SentientArchitect.Application.Common.Interfaces;
-using SentientArchitect.Data;
-using System.Text;
+using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Application.Features.Auth.Login;
+using SentientArchitect.Application.Features.Auth.LogoutSession;
+using SentientArchitect.Application.Features.Auth.RefreshSession;
+using SentientArchitect.Application.Features.Auth.RegisterUser;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -18,33 +17,12 @@ public class AuthEndpoints : IEndpointModule
             .WithTags("Auth");
 
         group.MapPost("/register", async (
-            [FromBody] RegisterRequest body,
-            [FromServices] UserManager<ApplicationUser> userManager) =>
+            [FromBody] RegisterUserRequest body,
+            [FromServices] RegisterUserUseCase useCase,
+            CancellationToken ct) =>
         {
-            var user = new ApplicationUser
-            {
-                Id          = Guid.NewGuid(),
-                UserName    = body.Email,
-                Email       = body.Email,
-                DisplayName = body.DisplayName,
-                TenantId    = Guid.NewGuid(),
-                CreatedAt   = DateTime.UtcNow,
-                IsActive    = true,
-            };
-
-            var createResult = await userManager.CreateAsync(user, body.Password);
-
-            if (!createResult.Succeeded)
-            {
-                var errors = createResult.Errors.Select(e => e.Description).ToList();
-                return Results.BadRequest(new { errors });
-            }
-
-            await userManager.AddToRoleAsync(user, "User");
-
-            return Results.Created(
-                $"/api/v1/auth/{user.Id}",
-                new { userId = user.Id, email = user.Email, displayName = user.DisplayName });
+            var result = await useCase.ExecuteAsync(body, ct);
+            return ToRegisterResult(result);
         })
         .WithName("Register")
         .WithOpenApi()
@@ -52,97 +30,89 @@ public class AuthEndpoints : IEndpointModule
 
         group.MapPost("/login", async (
             [FromBody] LoginRequest body,
-            [FromServices] UserManager<ApplicationUser> userManager,
-            [FromServices] ITokenService tokenService) =>
+            [FromServices] LoginUseCase useCase,
+            CancellationToken ct) =>
         {
-            var user = await userManager.FindByEmailAsync(body.Email);
-
-            if (user is null || !await userManager.CheckPasswordAsync(user, body.Password))
-                return Results.Unauthorized();
-
-            var roles       = await userManager.GetRolesAsync(user);
-            var expiresDays = 7;
-
-            var token = tokenService.CreateToken(
-                user.Id,
-                user.Email!,
-                user.DisplayName,
-                user.TenantId,
-                roles);
-
-            return Results.Ok(new
-            {
-                token,
-                refreshToken = token, // JWT re-used as refresh credential (stateless)
-                expiresIn    = expiresDays * 86400,
-                user = new
-                {
-                    id          = user.Id,
-                    email       = user.Email,
-                    displayName = user.DisplayName,
-                    role        = roles.FirstOrDefault() ?? "User",
-                    tenantId    = user.TenantId,
-                },
-            });
+            var result = await useCase.ExecuteAsync(body, ct);
+            return ToLoginResult(result);
         })
         .WithName("Login")
         .WithOpenApi()
         .AllowAnonymous();
 
         group.MapPost("/refresh", async (
-            [FromBody] RefreshRequest body,
-            [FromServices] UserManager<ApplicationUser> userManager,
-            [FromServices] ITokenService tokenService,
-            [FromServices] IConfiguration configuration) =>
+            [FromBody] RefreshSessionRequest body,
+            [FromServices] RefreshSessionUseCase useCase,
+            CancellationToken ct) =>
         {
-            var key = configuration["Jwt:Key"];
-            if (string.IsNullOrWhiteSpace(key))
-                return Results.Problem("JWT not configured");
-
-            // Validate the submitted token (expired or not) to extract the userId claim
-            var handler = new JwtSecurityTokenHandler();
-            SecurityToken? validated = null;
-            try
-            {
-                handler.ValidateToken(body.RefreshToken, new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
-                    ValidateIssuer           = false,
-                    ValidateAudience         = false,
-                    ValidateLifetime         = false, // allow expired tokens
-                    ClockSkew                = TimeSpan.Zero,
-                }, out validated);
-            }
-            catch
-            {
-                return Results.Unauthorized();
-            }
-
-            var jwt = (JwtSecurityToken)validated;
-            var subClaim = jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-            if (!Guid.TryParse(subClaim, out var userId))
-                return Results.Unauthorized();
-
-            var user = await userManager.FindByIdAsync(userId.ToString());
-            if (user is null || !user.IsActive)
-                return Results.Unauthorized();
-
-            var roles    = await userManager.GetRolesAsync(user);
-            var newToken = tokenService.CreateToken(user.Id, user.Email!, user.DisplayName, user.TenantId, roles);
-
-            return Results.Ok(new
-            {
-                token        = newToken,
-                refreshToken = newToken,
-            });
+            var result = await useCase.ExecuteAsync(body, ct);
+            return ToRefreshResult(result);
         })
         .WithName("RefreshToken")
         .WithOpenApi()
         .AllowAnonymous();
+
+        group.MapPost("/logout", async (
+            [FromServices] IUserAccessor userAccessor,
+            [FromServices] LogoutSessionUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(
+                new LogoutSessionRequest(userAccessor.GetCurrentUserId()),
+                ct);
+
+            return result.Succeeded ? Results.NoContent() : Results.Unauthorized();
+        })
+        .WithName("Logout")
+        .WithOpenApi()
+        .RequireAuthorization();
     }
 
-    private record RegisterRequest(string Email, string Password, string DisplayName);
-    private record LoginRequest(string Email, string Password);
-    private record RefreshRequest(string RefreshToken);
+    private static IResult ToRegisterResult(Result<RegisterUserResponse> result)
+    {
+        if (!result.Succeeded || result.Data is null)
+            return Results.BadRequest(new { errors = result.Errors });
+
+        return Results.Created(
+            $"/api/v1/auth/{result.Data.UserId}",
+            new
+            {
+                userId = result.Data.UserId,
+                email = result.Data.Email,
+                displayName = result.Data.DisplayName,
+            });
+    }
+
+    private static IResult ToLoginResult(Result<LoginResponse> result)
+    {
+        if (!result.Succeeded || result.Data is null)
+            return Results.Unauthorized();
+
+        return Results.Ok(new
+        {
+            token = result.Data.Token,
+            refreshToken = result.Data.RefreshToken,
+            expiresIn = result.Data.ExpiresIn,
+            user = new
+            {
+                id = result.Data.User.Id,
+                email = result.Data.User.Email,
+                displayName = result.Data.User.DisplayName,
+                role = result.Data.User.Role,
+                tenantId = result.Data.User.TenantId,
+            },
+        });
+    }
+
+    private static IResult ToRefreshResult(Result<RefreshSessionResponse> result)
+    {
+        if (!result.Succeeded || result.Data is null)
+            return Results.Unauthorized();
+
+        return Results.Ok(new
+        {
+            token = result.Data.Token,
+            refreshToken = result.Data.RefreshToken,
+        });
+    }
 }

@@ -15,4 +15,15 @@ public interface ITokenService
     /// <param name="tenantId">The user's tenant scope for multi-tenancy.</param>
     /// <param name="roles">One or more role names assigned to the user.</param>
     string CreateToken(Guid userId, string email, string displayName, Guid tenantId, IList<string> roles);
+
+    /// <summary>
+    /// Reads the user id from a signed JWT. Returns null when the token is invalid.
+    /// When <paramref name="allowExpired"/> is true, issuer/audience/signature are still validated.
+    /// </summary>
+    Guid? GetUserIdFromToken(string token, bool allowExpired = false);
+
+    /// <summary>
+    /// Returns the configured access token lifetime in seconds.
+    /// </summary>
+    int GetAccessTokenLifetimeSeconds();
 }
