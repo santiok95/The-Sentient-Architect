@@ -179,6 +179,7 @@ public static class InfrastructureServiceExtensions
             sp.GetService<IChatCompletionService>(),
             sp.GetRequiredService<ILogger<TrendScanner>>()));
         services.AddHostedService<TrendScannerService>();
+        services.AddHostedService<RepositoryAnalysisQueueWorker>();
 
         // ── Code Guardian ─────────────────────────────────────────────────────────
         services.AddScoped<ICodeAnalyzer, CodeAnalyzer>();

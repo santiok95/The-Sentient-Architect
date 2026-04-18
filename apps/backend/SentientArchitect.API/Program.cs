@@ -81,6 +81,7 @@ builder.Services.AddApplication();
 builder.Services.Configure<ConversationOptions>(
     builder.Configuration.GetSection(ConversationOptions.SectionName));
 builder.Services.AddScoped<IAnalysisProgressReporter, AnalysisProgressReporter>();
+builder.Services.AddScoped<IConversationStreamPublisher, SignalRConversationStreamPublisher>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
