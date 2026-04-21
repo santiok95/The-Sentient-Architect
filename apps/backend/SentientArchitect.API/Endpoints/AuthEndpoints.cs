@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SentientArchitect.API.Common.Endpoints;
+using SentientArchitect.API.Filters;
+using SentientArchitect.API.Options;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
 using SentientArchitect.Application.Features.Auth.Login;
@@ -13,10 +16,13 @@ public class AuthEndpoints : IEndpointModule
 {
     public void Map(IEndpointRouteBuilder app)
     {
+        var rateLimitOpts = app.ServiceProvider
+            .GetRequiredService<IOptions<AuthRateLimitOptions>>().Value;
+
         var group = app.MapGroup("/api/v1/auth")
             .WithTags("Auth");
 
-        group.MapPost("/register", async (
+        var register = group.MapPost("/register", async (
             [FromBody] RegisterUserRequest body,
             [FromServices] RegisterUserUseCase useCase,
             CancellationToken ct) =>
@@ -28,7 +34,7 @@ public class AuthEndpoints : IEndpointModule
         .WithOpenApi()
         .AllowAnonymous();
 
-        group.MapPost("/login", async (
+        var login = group.MapPost("/login", async (
             [FromBody] LoginRequest body,
             [FromServices] LoginUseCase useCase,
             CancellationToken ct) =>
@@ -40,7 +46,10 @@ public class AuthEndpoints : IEndpointModule
         .WithOpenApi()
         .AllowAnonymous();
 
-        group.MapPost("/refresh", async (
+        if (rateLimitOpts.Enabled)
+            login.AddEndpointFilter<LoginFailedByEmailFilter>();
+
+        var refresh = group.MapPost("/refresh", async (
             [FromBody] RefreshSessionRequest body,
             [FromServices] RefreshSessionUseCase useCase,
             CancellationToken ct) =>
