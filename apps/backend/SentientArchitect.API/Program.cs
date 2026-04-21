@@ -239,26 +239,6 @@ app.MapHub<AnalysisHub>("/hubs/analysis");
 // Endpoints
 app.MapEndpointModules();
 
-// ── Temporary diagnostic endpoint ─────────────────────────────────────────
-app.MapGet("/debug/headers", (HttpContext ctx) =>
-{
-    var headers = ctx.Request.Headers
-        .Select(h => new { h.Key, Value = h.Value.ToString() })
-        .OrderBy(h => h.Key);
-
-    var remoteIp = ctx.Connection.RemoteIpAddress?.ToString();
-    var forwardedFor = ctx.Request.Headers["X-Forwarded-For"].ToString();
-    var cfConnectingIp = ctx.Request.Headers["CF-Connecting-IP"].ToString();
-
-    return Results.Ok(new
-    {
-        RemoteIpAddress = remoteIp,
-        XForwardedFor = forwardedFor,
-        CFConnectingIP = cfConnectingIp,
-        AllHeaders = headers
-    });
-});
-
 app.Run();
 
 static SlidingWindowRateLimiterOptions BuildSlidingWindowOptions(int permitLimit, int windowSeconds)
@@ -276,10 +256,16 @@ static SlidingWindowRateLimiterOptions BuildSlidingWindowOptions(int permitLimit
 
 static string GetClientIpPartitionKey(HttpContext httpContext)
 {
-    var remoteIp = httpContext.Connection.RemoteIpAddress;
-    if (remoteIp is not null && !IPAddress.IsLoopback(remoteIp))
-        return remoteIp.ToString();
+    // Cloudflare inyecta CF-Connecting-IP con la IP real del cliente
+    // Este header no puede ser falsificado porque Cloudflare lo controla
+    if (httpContext.Request.Headers.TryGetValue("CF-Connecting-IP", out var cfIp))
+    {
+        var ip = cfIp.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(ip))
+            return ip;
+    }
 
+    // Fallback: X-Forwarded-For (para desarrollo sin Cloudflare)
     if (httpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
     {
         var candidate = forwardedFor.ToString()
@@ -290,6 +276,8 @@ static string GetClientIpPartitionKey(HttpContext httpContext)
             return candidate;
     }
 
+    // Último fallback: RemoteIpAddress (desarrollo local directo)
+    var remoteIp = httpContext.Connection.RemoteIpAddress;
     return remoteIp?.ToString() ?? "unknown";
 }
 
