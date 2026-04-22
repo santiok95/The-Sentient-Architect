@@ -23,5 +23,8 @@ public interface IApplicationDbContext
     DbSet<TechnologyTrend> TechnologyTrends { get; }
     DbSet<TrendSnapshot> TrendSnapshots { get; }
 
+    // --- Auth ---
+    DbSet<RefreshToken> RefreshTokens { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -1,5 +1,6 @@
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
+using SentientArchitect.Domain.Entities;
 
 namespace SentientArchitect.Application.Features.Auth.Login;
 
@@ -18,7 +19,7 @@ public record LoginResponse(
     int ExpiresIn,
     AuthSessionUser User);
 
-public class LoginUseCase(IAuthIdentityService authIdentityService, ITokenService tokenService)
+public class LoginUseCase(IAuthIdentityService authIdentityService, ITokenService tokenService, IApplicationDbContext db)
 {
     public async Task<Result<LoginResponse>> ExecuteAsync(
         LoginRequest request,
@@ -32,16 +33,21 @@ public class LoginUseCase(IAuthIdentityService authIdentityService, ITokenServic
         if (!user.IsActive)
             return Result<LoginResponse>.Failure(["Tu cuenta está inactiva. Contactá al soporte para más información."], ErrorType.Unauthorized);
 
-        var token = tokenService.CreateToken(
+        var accessToken = tokenService.CreateToken(
             user.Id,
             user.Email,
             user.DisplayName,
             user.TenantId,
             user.Roles.ToList());
 
+        var rawRefreshToken = tokenService.GenerateRefreshToken();
+        var expiresAt = DateTimeOffset.UtcNow.AddDays(tokenService.GetRefreshTokenLifetimeDays());
+        db.RefreshTokens.Add(new RefreshToken(user.Id, rawRefreshToken, expiresAt));
+        await db.SaveChangesAsync(ct);
+
         return Result<LoginResponse>.SuccessWith(new LoginResponse(
-            token,
-            token,
+            accessToken,
+            rawRefreshToken,
             tokenService.GetAccessTokenLifetimeSeconds(),
             new AuthSessionUser(
                 user.Id,

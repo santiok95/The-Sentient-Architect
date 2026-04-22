@@ -227,7 +227,7 @@ public sealed class ChatExecutionService(
 
         // Plugins share the same scoped DbContext; keep this flow sequential to avoid
         // "A second operation was started on this context instance" concurrency errors.
-        var userProfile = await profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
+        var userProfile = await profilePlugin.GetUserProfileAsync(ct);
         var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
             request.ConversationId.ToString(),
             ct);

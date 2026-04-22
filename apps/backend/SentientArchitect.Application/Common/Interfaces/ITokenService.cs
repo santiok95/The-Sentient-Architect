@@ -26,4 +26,14 @@ public interface ITokenService
     /// Returns the configured access token lifetime in seconds.
     /// </summary>
     int GetAccessTokenLifetimeSeconds();
+
+    /// <summary>
+    /// Generates a cryptographically secure opaque refresh token string.
+    /// </summary>
+    string GenerateRefreshToken();
+
+    /// <summary>
+    /// Returns the configured refresh token lifetime in days.
+    /// </summary>
+    int GetRefreshTokenLifetimeDays();
 }

@@ -84,6 +84,16 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
     public int GetAccessTokenLifetimeSeconds() =>
         (int)TimeSpan.FromHours(GetExpiresHours()).TotalSeconds;
 
+    public string GenerateRefreshToken() =>
+        Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
+
+    public int GetRefreshTokenLifetimeDays()
+    {
+        if (int.TryParse(configuration["Jwt:RefreshTokenExpireDays"], out var days) && days > 0)
+            return days;
+        return 30;
+    }
+
     private TokenValidationParameters CreateValidationParameters(bool validateLifetime)
     {
         var issuer = configuration["Jwt:Issuer"] ?? "SentientArchitect";

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Common.Results;
@@ -6,6 +7,7 @@ using SentientArchitect.Application.Features.Auth.Login;
 using SentientArchitect.Application.Features.Auth.LogoutSession;
 using SentientArchitect.Application.Features.Auth.RefreshSession;
 using SentientArchitect.Application.Features.Auth.RegisterUser;
+using SentientArchitect.Data;
 
 namespace SentientArchitect.UnitTests.Application.Features.Auth;
 
@@ -212,10 +214,18 @@ public class RefreshSessionUseCaseTests
 
 public class LogoutSessionUseCaseTests
 {
+    private static IApplicationDbContext BuildDbContext()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ApplicationContext(options);
+    }
+
     [Fact]
     public async Task ExecuteAsync_ShouldReturnUnauthorized_WhenUserIdIsEmpty()
     {
-        var sut = new LogoutSessionUseCase();
+        var sut = new LogoutSessionUseCase(BuildDbContext());
 
         var result = await sut.ExecuteAsync(new LogoutSessionRequest(Guid.Empty));
 
@@ -226,7 +236,7 @@ public class LogoutSessionUseCaseTests
     [Fact]
     public async Task ExecuteAsync_ShouldReturnSuccess_WhenUserIdIsPresent()
     {
-        var sut = new LogoutSessionUseCase();
+        var sut = new LogoutSessionUseCase(BuildDbContext());
 
         var result = await sut.ExecuteAsync(new LogoutSessionRequest(Guid.NewGuid()));
 

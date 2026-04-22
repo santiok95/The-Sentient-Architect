@@ -38,6 +38,9 @@ public class ApplicationContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<TechnologyTrend> TechnologyTrends => Set<TechnologyTrend>();
     public DbSet<TrendSnapshot> TrendSnapshots => Set<TrendSnapshot>();
 
+    // --- Auth ---
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
