@@ -61,6 +61,16 @@ builder.Services.AddOptions<AuthRateLimitOptions>()
     .Bind(builder.Configuration.GetSection(AuthRateLimitOptions.SectionName))
     .ValidateDataAnnotations();
 
+builder.Services.AddOptions<ChatRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(ChatRateLimitOptions.SectionName))
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<ChatLimitsOptions>()
+    .Bind(builder.Configuration.GetSection(ChatLimitsOptions.SectionName))
+    .ValidateDataAnnotations();
+
+builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((doc, _, _) =>
@@ -108,7 +118,7 @@ builder.Services.AddRateLimiter(limiter =>
             : TimeSpan.FromSeconds(60);
 
         await new SentientArchitect.API.Filters.AuthRateLimitRejectedResult(
-            "Rate limit exceeded. Please wait before retrying.",
+            "Demasiadas solicitudes. Esperá un momento antes de reintentar.",
             retryAfter,
             ResolveAuthRateLimitPolicy(ctx.HttpContext),
             "ip",
@@ -164,6 +174,8 @@ builder.Services.AddScoped<IConversationStreamPublisher, SignalRConversationStre
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SentientArchitect.API.Filters.ILoginAttemptTracker,
                               SentientArchitect.API.Filters.InMemoryLoginAttemptTracker>();
+builder.Services.AddSingleton<SentientArchitect.API.Filters.IUserChatThrottleService,
+                              SentientArchitect.API.Filters.InMemoryUserChatThrottleService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
@@ -198,6 +210,20 @@ if (missingKeys.Count > 0)
     startupLogger.LogWarning(
         "Missing configuration keys (non-fatal in Development): {Keys}. " +
         "Embedding and/or AI features will not work.", missing);
+}
+
+// CORS origin validation — en prod fallamos si no hay al menos un origen desde config.
+startupLogger.LogInformation(
+    "CORS allowed origins ({Count}): {Origins}",
+    allowedCorsOrigins.Length,
+    string.Join(", ", allowedCorsOrigins));
+
+if (app.Environment.IsProduction() && configuredCorsOrigins.Length == 0)
+{
+    startupLogger.LogCritical(
+        "Startup aborted — Cors:AllowedOrigins is empty in production. " +
+        "Set Cors__AllowedOrigins__0=https://your-domain as an environment variable.");
+    return;
 }
 
 // Apply pending migrations and seed roles + admin user

@@ -8,7 +8,6 @@ using SentientArchitect.Application.Common.Results;
 using SentientArchitect.Application.Features.Auth.Login;
 using SentientArchitect.Application.Features.Auth.LogoutSession;
 using SentientArchitect.Application.Features.Auth.RefreshSession;
-using SentientArchitect.Application.Features.Auth.RegisterUser;
 
 namespace SentientArchitect.API.Endpoints;
 
@@ -22,14 +21,14 @@ public class AuthEndpoints : IEndpointModule
         var group = app.MapGroup("/api/v1/auth")
             .WithTags("Auth");
 
-        var register = group.MapPost("/register", async (
-            [FromBody] RegisterUserRequest body,
-            [FromServices] RegisterUserUseCase useCase,
-            CancellationToken ct) =>
-        {
-            var result = await useCase.ExecuteAsync(body, ct);
-            return ToRegisterResult(result);
-        })
+        // Registro deshabilitado temporalmente.
+        // Razones: sin email verification ni CAPTCHA, un atacante con proxies
+        // rotativos puede crear cuentas fantasma. Hasta tener esos controles,
+        // el endpoint responde 403 y no ejecuta el use case.
+        group.MapPost("/register", () => Results.Problem(
+            statusCode: StatusCodes.Status403Forbidden,
+            title: "El registro está deshabilitado.",
+            detail: "El registro público no está habilitado en este momento."))
         .WithName("Register")
         .WithOpenApi()
         .AllowAnonymous();
@@ -82,34 +81,6 @@ public class AuthEndpoints : IEndpointModule
         .WithName("Logout")
         .WithOpenApi()
         .RequireAuthorization();
-    }
-
-    private static IResult ToRegisterResult(Result<RegisterUserResponse> result)
-    {
-        if (!result.Succeeded || result.Data is null)
-        {
-            var statusCode = result.ErrorType == ErrorType.Conflict
-                ? StatusCodes.Status409Conflict
-                : StatusCodes.Status400BadRequest;
-            var title = result.ErrorType == ErrorType.Conflict
-                ? "El correo electrónico ya está registrado."
-                : "No fue posible completar el registro.";
-            return Results.Problem(
-                statusCode: statusCode,
-                title: title,
-                detail: result.Errors.Count > 0
-                    ? string.Join("; ", result.Errors)
-                    : "Revisá los datos ingresados e intentá de nuevo.");
-        }
-
-        return Results.Created(
-            $"/api/v1/auth/{result.Data.UserId}",
-            new
-            {
-                userId = result.Data.UserId,
-                email = result.Data.Email,
-                displayName = result.Data.DisplayName,
-            });
     }
 
     private static IResult ToLoginResult(Result<LoginResponse> result)

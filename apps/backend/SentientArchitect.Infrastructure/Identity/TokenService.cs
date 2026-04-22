@@ -9,7 +9,7 @@ namespace SentientArchitect.Infrastructure.Identity;
 
 /// <summary>
 /// Generates signed JWT bearer tokens.
-/// Reads Jwt:Key, Jwt:Issuer, Jwt:Audience, Jwt:ExpiresInDays from configuration.
+/// Reads Jwt:Key, Jwt:Issuer, Jwt:Audience, Jwt:ExpiresInHours from configuration.
 /// </summary>
 public sealed class TokenService(IConfiguration configuration) : ITokenService
 {
@@ -30,7 +30,7 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
 
         var issuer   = configuration["Jwt:Issuer"]   ?? "SentientArchitect";
         var audience = configuration["Jwt:Audience"] ?? "SentientArchitect";
-        var expiresDays = int.TryParse(configuration["Jwt:ExpiresInDays"], out var days) ? days : 7;
+        var expiresHours = GetExpiresHours();
 
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
@@ -52,7 +52,7 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
             audience:           audience,
             claims:             claims,
             notBefore:          DateTime.UtcNow,
-            expires:            DateTime.UtcNow.AddDays(expiresDays),
+            expires:            DateTime.UtcNow.AddHours(expiresHours),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -82,7 +82,7 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
     }
 
     public int GetAccessTokenLifetimeSeconds() =>
-        (int)TimeSpan.FromDays(GetExpiresDays()).TotalSeconds;
+        (int)TimeSpan.FromHours(GetExpiresHours()).TotalSeconds;
 
     private TokenValidationParameters CreateValidationParameters(bool validateLifetime)
     {
@@ -106,6 +106,17 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
         configuration["Jwt:Key"]
             ?? throw new InvalidOperationException("Jwt:Key is not configured.");
 
-    private int GetExpiresDays() =>
-        int.TryParse(configuration["Jwt:ExpiresInDays"], out var days) ? days : 7;
+    // Lee Jwt:ExpiresInHours con fallback a Jwt:ExpiresInDays por compatibilidad.
+    // Default: 1 hora (access token corto — recordá que Logout no revoca, así que
+    // un token robado vive hasta que expire).
+    private int GetExpiresHours()
+    {
+        if (int.TryParse(configuration["Jwt:ExpiresInHours"], out var hours) && hours > 0)
+            return hours;
+
+        if (int.TryParse(configuration["Jwt:ExpiresInDays"], out var days) && days > 0)
+            return days * 24;
+
+        return 1;
+    }
 }

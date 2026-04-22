@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SentientArchitect.API.Common.Endpoints;
 using SentientArchitect.API.Extensions;
+using SentientArchitect.API.Filters;
 using SentientArchitect.Application.Common.Interfaces;
 using SentientArchitect.Application.Features.Conversations.Chat;
 using SentientArchitect.Domain.Enums;
@@ -37,10 +38,12 @@ public class ChatEndpoints : IEndpointModule
             return result.ToHttpResult();
         })
         .WithName("Chat")
-        .WithOpenApi();
+        .WithOpenApi()
+        .AddEndpointFilter<ChatMessageLimitsFilter>()  // 1º: largo del mensaje + presupuesto diario
+        .AddEndpointFilter<ChatThrottleFilter>();      // 2º: sliding window per-user
     }
 
-    private record ChatRequest(
+    internal record ChatRequest(
         string Message,
         Guid? ActiveRepositoryId = null,
         string? PreferredStack = null,

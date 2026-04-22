@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoginForm } from './_components/LoginForm'
 
 export const metadata: Metadata = { title: 'Iniciar sesión' }
@@ -34,14 +33,6 @@ export default function LoginPage() {
               <LoginForm />
             </Suspense>
           </CardContent>
-          <CardFooter className="justify-center pt-0">
-            <p className="text-xs text-muted-foreground">
-              ¿No tenés cuenta?{' '}
-              <Link href="/register" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                Registrate
-              </Link>
-            </p>
-          </CardFooter>
         </Card>
       </div>
     </div>

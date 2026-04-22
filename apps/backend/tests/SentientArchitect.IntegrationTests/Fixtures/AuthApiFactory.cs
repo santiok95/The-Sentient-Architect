@@ -38,7 +38,7 @@ internal sealed class AuthApiFactory(string databaseName, TestLogSink logSink) :
                 ["Jwt:Key"] = "test-secret-key-minimum-32-chars!!",
                 ["Jwt:Issuer"] = "SentientArchitect",
                 ["Jwt:Audience"] = "SentientArchitect",
-                ["Jwt:ExpiresInDays"] = "7",
+                ["Jwt:ExpiresInHours"] = "1",
                 ["Seeder:AdminEmail"] = "admin@test.local",
                 ["Seeder:AdminPassword"] = "Admin123!",
                 ["Conversation:CompactionThreshold"] = "20",
