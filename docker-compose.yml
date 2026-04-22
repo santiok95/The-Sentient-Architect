@@ -51,6 +51,7 @@ services:
       ChatLimits__MaxMessageLength: '${CHAT_MAX_MESSAGE_LENGTH:-12000}'
       ChatLimits__DailyTokenBudget: '${CHAT_DAILY_TOKEN_BUDGET:-100000}'
       ChatLimits__BypassForAdmin: '${CHAT_BYPASS_FOR_ADMIN:-true}'
+      Cors__AllowedOrigins__0: '${CORS_ALLOWED_ORIGINS_0:-https://ai-lab.santiagoniveyro.online}'
     depends_on:
       postgres:
         condition: service_healthy
