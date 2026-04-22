@@ -218,7 +218,7 @@ startupLogger.LogInformation(
     allowedCorsOrigins.Length,
     string.Join(", ", allowedCorsOrigins));
 
-if (app.Environment.IsProduction() && configuredCorsOrigins.Length == 0)
+if (app.Environment.IsProduction() && allowedCorsOrigins.Length == 0)
 {
     startupLogger.LogCritical(
         "Startup aborted — Cors:AllowedOrigins is empty in production. " +
