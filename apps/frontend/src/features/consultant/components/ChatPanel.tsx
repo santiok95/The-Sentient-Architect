@@ -545,7 +545,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Context Mode</div>
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Modo de contexto</div>
                 <DropdownMenuSeparator />
                 {(Object.keys(CONTEXT_MODE_LABELS) as ContextMode[]).map((m) => (
                   <DropdownMenuItem

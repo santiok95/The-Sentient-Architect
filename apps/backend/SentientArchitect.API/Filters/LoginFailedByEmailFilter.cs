@@ -43,7 +43,7 @@ internal sealed class LoginFailedByEmailFilter(
 
     private static IResult BuildRejection(string email, TimeSpan retryAfter) =>
         new AuthRateLimitRejectedResult(
-            "Too many failed login attempts. Please wait before retrying.",
+            "Demasiados intentos fallidos. Esperá un momento antes de volver a intentarlo.",
             retryAfter,
             RateLimitPolicies.LoginByEmail,
             "email",

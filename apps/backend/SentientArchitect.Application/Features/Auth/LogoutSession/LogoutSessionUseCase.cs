@@ -13,7 +13,7 @@ public class LogoutSessionUseCase
         _ = ct;
 
         if (request.UserId == Guid.Empty)
-            return Task.FromResult(Result.Failure(["User is not authenticated."], ErrorType.Unauthorized));
+            return Task.FromResult(Result.Failure(["No hay una sesión activa para cerrar."], ErrorType.Unauthorized));
 
         return Task.FromResult(Result.Success);
     }

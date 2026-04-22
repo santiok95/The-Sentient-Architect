@@ -27,10 +27,10 @@ public class LoginUseCase(IAuthIdentityService authIdentityService, ITokenServic
         var user = await authIdentityService.ValidateCredentialsAsync(request.Email, request.Password, ct);
 
         if (user is null)
-            return Result<LoginResponse>.Failure(["Invalid credentials."], ErrorType.Unauthorized);
+            return Result<LoginResponse>.Failure(["El correo electrónico o la contraseña son incorrectos."], ErrorType.Unauthorized);
 
         if (!user.IsActive)
-            return Result<LoginResponse>.Failure(["User account is inactive."], ErrorType.Unauthorized);
+            return Result<LoginResponse>.Failure(["Tu cuenta está inactiva. Contactá al soporte para más información."], ErrorType.Unauthorized);
 
         var token = tokenService.CreateToken(
             user.Id,

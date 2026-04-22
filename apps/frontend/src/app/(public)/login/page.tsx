@@ -27,10 +27,7 @@ export default function LoginPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base">Bienvenido de nuevo</CardTitle>
-            <CardDescription className="text-xs">
-              Ingresá tus credenciales para acceder a tu base de conocimiento.
-            </CardDescription>
+            <CardTitle className="font-heading text-base">Bienvenido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Suspense>

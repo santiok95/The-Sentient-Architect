@@ -29,26 +29,39 @@ public static class ResultExtensions
             ErrorType.NotFound => Results.Problem(
                 statusCode: StatusCodes.Status404NotFound,
                 title: "Recurso no encontrado.",
-                detail: string.Join("; ", errors)),
+                detail: errors.Count > 0
+                    ? string.Join("; ", errors)
+                    : "El recurso solicitado no existe o no está disponible."),
 
             ErrorType.Conflict => Results.Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Conflicto en la operación.",
-                detail: string.Join("; ", errors)),
+                detail: errors.Count > 0
+                    ? string.Join("; ", errors)
+                    : "La operación no pudo completarse porque existe un conflicto con el estado actual."),
 
             ErrorType.Unauthorized => Results.Problem(
                 statusCode: StatusCodes.Status401Unauthorized,
                 title: "No autorizado.",
-                detail: string.Join("; ", errors)),
+                detail: errors.Count > 0
+                    ? string.Join("; ", errors)
+                    : "Necesitás iniciar sesión para realizar esta acción."),
 
             ErrorType.Forbidden => Results.Problem(
                 statusCode: StatusCodes.Status403Forbidden,
                 title: "Acceso denegado.",
-                detail: string.Join("; ", errors)),
+                detail: errors.Count > 0
+                    ? string.Join("; ", errors)
+                    : "No tenés permisos para realizar esta acción."),
+
+            ErrorType.Failure => Results.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Ocurrió un error inesperado.",
+                detail: "No fue posible completar la operación. Si el problema persiste, contactá al soporte."),
 
             _ => Results.ValidationProblem(
                 errors: errorDictionary,
-                title: "Ha ocurrido uno o más errores de validación/negocio.",
+                title: "Revisá los datos ingresados.",
                 type: "https://tools.ietf.org/html/rfc7231#section-6.5.1")
         };
     }

@@ -16,11 +16,11 @@ public class RefreshSessionUseCase(IAuthIdentityService authIdentityService, ITo
         var userId = tokenService.GetUserIdFromToken(request.RefreshToken, allowExpired: true);
 
         if (!userId.HasValue)
-            return Result<RefreshSessionResponse>.Failure(["Invalid refresh token."], ErrorType.Unauthorized);
+            return Result<RefreshSessionResponse>.Failure(["La sesión expiró o no es válida. Iniciá sesión nuevamente."], ErrorType.Unauthorized);
 
         var user = await authIdentityService.FindByIdAsync(userId.Value, ct);
         if (user is null || !user.IsActive)
-            return Result<RefreshSessionResponse>.Failure(["Invalid refresh token."], ErrorType.Unauthorized);
+            return Result<RefreshSessionResponse>.Failure(["La sesión expiró o no es válida. Iniciá sesión nuevamente."], ErrorType.Unauthorized);
 
         var newToken = tokenService.CreateToken(
             user.Id,

@@ -74,7 +74,7 @@ export function IngestProgress() {
   return (
     <div
       role="status"
-      aria-label="Ingestion progress"
+      aria-label="Progreso de ingesta"
       className={cn(
         'flex items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-all',
         state.status === 'completed' && 'border-emerald-500/30 bg-emerald-500/10',

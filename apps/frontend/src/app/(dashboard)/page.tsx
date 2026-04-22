@@ -18,11 +18,11 @@ const RECENT_KNOWLEDGE: {
   scope: 'shared' | 'personal'
   status: StatusDot
 }[] = [
-  { title: 'CQRS + Event Sourcing in .NET 9', meta: 'Article · 2h ago', tags: ['CQRS', '.NET'], scope: 'shared', status: 'done' },
-  { title: 'Vertical Slice Architecture Guide', meta: 'Documentation · 5h ago', tags: ['Architecture'], scope: 'shared', status: 'done' },
-  { title: 'pgvector Performance Benchmarks', meta: 'Note · Yesterday', tags: ['PostgreSQL', 'AI'], scope: 'personal', status: 'processing' },
-  { title: 'github.com/dotnet/aspire', meta: 'Repository · 2 days ago', tags: ['Aspire', '.NET'], scope: 'shared', status: 'done' },
-  { title: 'Rate Limiting Patterns for APIs', meta: 'Article · 3 days ago', tags: ['API', 'Patterns'], scope: 'personal', status: 'pending' },
+  { title: 'CQRS + Event Sourcing in .NET 9', meta: 'Artículo · hace 2h', tags: ['CQRS', '.NET'], scope: 'shared', status: 'done' },
+  { title: 'Vertical Slice Architecture Guide', meta: 'Documentación · hace 5h', tags: ['Architecture'], scope: 'shared', status: 'done' },
+  { title: 'pgvector Performance Benchmarks', meta: 'Nota · Ayer', tags: ['PostgreSQL', 'AI'], scope: 'personal', status: 'processing' },
+  { title: 'github.com/dotnet/aspire', meta: 'Repositorio · hace 2 días', tags: ['Aspire', '.NET'], scope: 'shared', status: 'done' },
+  { title: 'Rate Limiting Patterns for APIs', meta: 'Artículo · hace 3 días', tags: ['API', 'Patterns'], scope: 'personal', status: 'pending' },
 ]
 
 const TRENDS: { icon: string; name: string; cat: string; traction: TractionLevel }[] = [
@@ -38,9 +38,9 @@ const PENDING_APPROVALS: {
   title: string
   meta: string
 }[] = [
-  { initials: 'MG', gradient: 'from-blue-500 to-violet-500', title: 'Microservices Anti-Patterns in 2025', meta: 'by Marcos G. · Article · 1h ago' },
-  { initials: 'LR', gradient: 'from-green-500 to-cyan-500', title: 'Clean Architecture Decision Log', meta: 'by Laura R. · Documentation · 3h ago' },
-  { initials: 'JP', gradient: 'from-yellow-500 to-red-500', title: 'github.com/dotnet/extensions', meta: 'by Juan P. · Repository · Yesterday' },
+  { initials: 'MG', gradient: 'from-blue-500 to-violet-500', title: 'Microservices Anti-Patterns in 2025', meta: 'por Marcos G. · Artículo · hace 1h' },
+  { initials: 'LR', gradient: 'from-green-500 to-cyan-500', title: 'Clean Architecture Decision Log', meta: 'por Laura R. · Documentación · hace 3h' },
+  { initials: 'JP', gradient: 'from-yellow-500 to-red-500', title: 'github.com/dotnet/extensions', meta: 'por Juan P. · Repositorio · Ayer' },
 ]
 
 // ─── Style helpers ────────────────────────────────────────────────────────────
@@ -62,6 +62,12 @@ const TRACTION: Record<TractionLevel, string> = {
   growing: 'bg-green-500/15 text-green-500',
   emerging: 'bg-yellow-500/15 text-yellow-500',
   mainstream: 'bg-blue-500/15 text-blue-500',
+}
+
+const TRACTION_LABELS: Record<TractionLevel, string> = {
+  growing: 'En crecimiento',
+  emerging: 'Emergente',
+  mainstream: 'Establecido',
 }
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
@@ -105,10 +111,10 @@ export default function DashboardPage() {
       {/* Page header */}
       <div className="mb-6">
         <h1 className="font-mono text-[22px] font-bold tracking-[-0.4px] text-foreground">
-          Good morning, Santiago 👋
+          Buenos días, Santiago 👋
         </h1>
         <p className="text-[13.5px] text-muted-foreground mt-0.5">
-          Here&apos;s what&apos;s happening in your knowledge platform today.
+          Esto es lo que está pasando en tu plataforma hoy.
         </p>
       </div>
 
@@ -116,46 +122,46 @@ export default function DashboardPage() {
       <div className="flex gap-2.5 mb-7 flex-wrap">
         <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
           <Brain className="w-3.5 h-3.5" />
-          Add Knowledge
+          Agregar conocimiento
         </button>
         <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-medium bg-card border border-border text-foreground hover:bg-card/80 transition-colors">
           <MessageSquare className="w-3.5 h-3.5" />
-          New Consultation
+          Nueva consulta
         </button>
         <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-medium bg-card border border-border text-foreground hover:bg-card/80 transition-colors">
           <Shield className="w-3.5 h-3.5" />
-          Analyze Repo
+          Analizar repo
         </button>
       </div>
 
       {/* Stats grid — 2 cols on mobile, 4 on xl */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3.5 mb-7">
         <StatCard
-          label="Knowledge Items"
+          label="Ítems en la base"
           value={47}
-          delta="↑ 3 added today"
+          delta="↑ 3 agregados hoy"
           iconColor="violet"
           icon={<Brain className="w-[15px] h-[15px]" />}
         />
         <StatCard
-          label="Active Conversations"
+          label="Conversaciones activas"
           value={2}
-          delta="Last activity 12m ago"
+          delta="Última actividad hace 12m"
           deltaVariant="neutral"
           iconColor="blue"
           icon={<MessageSquare className="w-[15px] h-[15px]" />}
         />
         <StatCard
-          label="Repos Analyzed"
+          label="Repos analizados"
           value={8}
-          delta="↑ 1 this week"
+          delta="↑ 1 esta semana"
           iconColor="green"
           icon={<Shield className="w-[15px] h-[15px]" />}
         />
         <StatCard
-          label="Trends Tracked"
+          label="Tendencias monitoreadas"
           value={23}
-          delta="↑ 5 new this week"
+          delta="↑ 5 nuevas esta semana"
           iconColor="yellow"
           icon={<Activity className="w-[15px] h-[15px]" />}
         />
@@ -168,16 +174,16 @@ export default function DashboardPage() {
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <span className="font-mono text-[13.5px] font-semibold text-foreground">
-              Recent Shared Knowledge
+              Conocimiento compartido reciente
             </span>
             <span className="text-[12px] text-primary cursor-pointer hover:underline">
-              View all →
+              Ver todo →
             </span>
           </div>
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                {['Item', 'Tags', 'Scope', 'Status'].map((h) => (
+                {['Ítem', 'Tags', 'Scope', 'Estado'].map((h) => (
                   <th
                     key={h}
                     className="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.5px] px-5 py-2.5 border-b border-border"
@@ -214,7 +220,7 @@ export default function DashboardPage() {
                           : 'bg-blue-500/15 text-blue-500'
                       }`}
                     >
-                      {item.scope === 'shared' ? 'Shared' : 'Personal'}
+                      {item.scope === 'shared' ? 'Compartido' : 'Personal'}
                     </span>
                   </td>
                   <td className="px-5 py-3 border-b border-border/50">
@@ -227,7 +233,7 @@ export default function DashboardPage() {
           {/* Processing bar */}
           <div className="flex items-center gap-2.5 px-5 py-2.5 bg-blue-500/10 border-t border-border text-[12px] text-blue-400">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
-            pgvector Performance Benchmarks — Embedding in progress (72%)
+            pgvector Performance Benchmarks — Generando embeddings (72%)
           </div>
         </div>
 
@@ -257,7 +263,7 @@ export default function DashboardPage() {
                   <div className="text-[11.5px] text-muted-foreground">{trend.cat}</div>
                 </div>
                 <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${TRACTION[trend.traction]}`}>
-                  {trend.traction.charAt(0).toUpperCase() + trend.traction.slice(1)}
+                  {TRACTION_LABELS[trend.traction]}
                 </span>
               </div>
             ))}
@@ -267,7 +273,7 @@ export default function DashboardPage() {
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <span className="font-mono text-[13.5px] font-semibold text-foreground">
-                Pending Approvals
+                Aprobaciones pendientes
               </span>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-destructive/15 text-destructive">
                 3
@@ -288,10 +294,10 @@ export default function DashboardPage() {
                   <div className="text-[11.5px] text-muted-foreground mt-0.5">{req.meta}</div>
                   <div className="flex gap-1.5 mt-2">
                     <button className="px-2.5 py-0.5 rounded-md text-[11.5px] font-medium bg-green-500/15 text-green-500 cursor-pointer hover:bg-green-500/25 transition-colors">
-                      ✓ Approve
+                      ✓ Aprobar
                     </button>
                     <button className="px-2.5 py-0.5 rounded-md text-[11.5px] font-medium bg-destructive/15 text-destructive cursor-pointer hover:bg-destructive/25 transition-colors">
-                      ✕ Reject
+                      ✕ Rechazar
                     </button>
                   </div>
                 </div>

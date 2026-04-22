@@ -31,7 +31,7 @@ public class ConversationEndpoints : IEndpointModule
             var request = new CreateConversationRequest(
                 userId,
                 tenantId,
-                body.Title ?? "New Conversation",
+                body.Title ?? "Nueva conversación",
                 body.AgentType,
                 body.ActiveRepositoryId);
             var result  = await useCase.ExecuteAsync(request, ct);

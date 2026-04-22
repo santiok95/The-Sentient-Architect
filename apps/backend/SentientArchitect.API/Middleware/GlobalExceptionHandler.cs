@@ -16,13 +16,11 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
             exception, "Exception occurred: {Message}", exception.Message);
 
 
-        //TODO usar la clase result para que siempre se devuelva la misma estructura del json
-
         var problemDetails = new ProblemDetails
         {
             Status = StatusCodes.Status500InternalServerError,
-            Title = "Server error",
-            Detail = "An unexpected error occurred processing your request.",
+            Title = "Ocurrió un error inesperado.",
+            Detail = "No fue posible procesar tu solicitud. Si el problema persiste, contactá al soporte.",
             Type = "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1"
         };
 

@@ -23,7 +23,7 @@ public class ConversationTests
     {
         var conversation = new Conversation(UserId, TenantId);
 
-        conversation.Title.Should().Be("New Conversation");
+        conversation.Title.Should().Be("Nueva conversación");
     }
 
     [Fact]

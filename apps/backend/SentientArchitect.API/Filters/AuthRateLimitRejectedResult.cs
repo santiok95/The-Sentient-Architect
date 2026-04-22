@@ -37,7 +37,7 @@ internal sealed class AuthRateLimitRejectedResult(
 
         return httpContext.Response.WriteAsJsonAsync(new
         {
-            title = "Too many requests",
+            title = "Demasiados intentos.",
             status = StatusCodes.Status429TooManyRequests,
             detail,
         }, httpContext.RequestAborted);

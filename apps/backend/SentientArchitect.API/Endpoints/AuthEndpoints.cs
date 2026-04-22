@@ -70,7 +70,14 @@ public class AuthEndpoints : IEndpointModule
                 new LogoutSessionRequest(userAccessor.GetCurrentUserId()),
                 ct);
 
-            return result.Succeeded ? Results.NoContent() : Results.Unauthorized();
+            return result.Succeeded
+                ? Results.NoContent()
+                : Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "No hay una sesión activa.",
+                    detail: result.Errors.Count > 0
+                        ? string.Join("; ", result.Errors)
+                        : "No estás autenticado o la sesión ya fue cerrada.");
         })
         .WithName("Logout")
         .WithOpenApi()
@@ -80,7 +87,20 @@ public class AuthEndpoints : IEndpointModule
     private static IResult ToRegisterResult(Result<RegisterUserResponse> result)
     {
         if (!result.Succeeded || result.Data is null)
-            return Results.BadRequest(new { errors = result.Errors });
+        {
+            var statusCode = result.ErrorType == ErrorType.Conflict
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest;
+            var title = result.ErrorType == ErrorType.Conflict
+                ? "El correo electrónico ya está registrado."
+                : "No fue posible completar el registro.";
+            return Results.Problem(
+                statusCode: statusCode,
+                title: title,
+                detail: result.Errors.Count > 0
+                    ? string.Join("; ", result.Errors)
+                    : "Revisá los datos ingresados e intentá de nuevo.");
+        }
 
         return Results.Created(
             $"/api/v1/auth/{result.Data.UserId}",
@@ -95,7 +115,12 @@ public class AuthEndpoints : IEndpointModule
     private static IResult ToLoginResult(Result<LoginResponse> result)
     {
         if (!result.Succeeded || result.Data is null)
-            return Results.Unauthorized();
+            return Results.Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "No pudimos iniciar sesión.",
+                detail: result.Errors.Count > 0
+                    ? string.Join("; ", result.Errors)
+                    : "El correo electrónico o la contraseña son incorrectos.");
 
         return Results.Ok(new
         {
@@ -116,7 +141,12 @@ public class AuthEndpoints : IEndpointModule
     private static IResult ToRefreshResult(Result<RefreshSessionResponse> result)
     {
         if (!result.Succeeded || result.Data is null)
-            return Results.Unauthorized();
+            return Results.Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Sesión inválida.",
+                detail: result.Errors.Count > 0
+                    ? string.Join("; ", result.Errors)
+                    : "La sesión expiró o no es válida. Iniciá sesión nuevamente.");
 
         return Results.Ok(new
         {
