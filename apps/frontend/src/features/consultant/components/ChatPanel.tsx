@@ -385,7 +385,7 @@ export function ChatPanel({ conversationId, onCreateConversation, isCreating }: 
                 key={a}
                 onClick={() => { setPendingAgentType(a); setPendingRepoId(null) }}
                 className={cn(
-                  'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm transition-colors',
+                  'flex flex-col items-center gap-2 rounded-xl border px-6 py-4 text-sm transition-colors w-28',
                   pendingAgentType === a
                     ? 'border-primary bg-primary/10 text-primary font-medium'
                     : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground',

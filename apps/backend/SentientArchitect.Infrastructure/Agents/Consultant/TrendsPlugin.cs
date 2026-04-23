@@ -80,9 +80,7 @@ public sealed class TrendsPlugin(IApplicationDbContext db)
                 _ => t.Direction.ToString()
             };
 
-            var score = (int)(t.RelevanceScore * 100);
-
-            sb.AppendLine($"### [{t.Category}] {t.Name} — {direction} (score: {score}/100)");
+            sb.AppendLine($"### [{t.Category}] {t.Name} — {direction}");
 
             if (!string.IsNullOrWhiteSpace(t.Description))
                 sb.AppendLine(t.Description);
