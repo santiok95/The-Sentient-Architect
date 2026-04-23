@@ -36,8 +36,8 @@ public sealed class SearchPlugin(
         {
             searchLines.AddRange(results.Select((r, i) =>
             {
-                var urlPart = !string.IsNullOrWhiteSpace(r.SourceUrl) ? $" [Source: {r.SourceUrl}]" : "";
-                return $"{i + 1}. [Project Rule: {r.Title}]{urlPart} [Relevance: {r.Score:F2}]\nContext: {r.ChunkText}";
+                var urlPart = !string.IsNullOrWhiteSpace(r.SourceUrl) ? $"\nSource URL (use this as markdown link in Fuentes section): {r.SourceUrl}" : "";
+                return $"{i + 1}. [Project Rule: {r.Title}] [Relevance: {r.Score:F2}]{urlPart}\nContext: {r.ChunkText}";
             }));
         }
 
@@ -68,7 +68,7 @@ public sealed class SearchPlugin(
                     var preview = m.OriginalContent.Length > 800
                         ? string.Concat(m.OriginalContent.AsSpan(0, 800), "…")
                         : m.OriginalContent;
-                    var urlPart = !string.IsNullOrWhiteSpace(m.SourceUrl) ? $" [Source: {m.SourceUrl}]" : "";
+                    var urlPart = !string.IsNullOrWhiteSpace(m.SourceUrl) ? $"\nSource URL (use this as markdown link in Fuentes section): {m.SourceUrl}" : "";
                     searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}]{urlPart} (Detected via keywords: {string.Join(", ", keywords)})\nContent: {preview}");
                 }
             }
