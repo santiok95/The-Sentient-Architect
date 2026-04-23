@@ -390,11 +390,12 @@ public sealed class ChatExecutionService(
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
-        // Extract keywords from the message to filter trends (same simple strategy as SearchPlugin).
+        // Extract keywords from the message — strip punctuation so "Testing?" matches "E2E Testing".
         var stackKeywords = request.Message
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => new string(w.Where(c => char.IsLetterOrDigit(c)).ToArray()))
             .Where(w => w.Length > 2)
-            .Select(w => w.Trim().ToLowerInvariant())
+            .Select(w => w.ToLowerInvariant())
             .ToArray();
 
         // 1. Call TrendsPlugin deterministically — this is the primary data source.

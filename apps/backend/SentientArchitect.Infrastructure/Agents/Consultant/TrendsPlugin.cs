@@ -22,33 +22,33 @@ public sealed class TrendsPlugin(IApplicationDbContext db)
         [Description("Maximum number of trends to return. Default: 10.")] int maxResults = 10,
         CancellationToken cancellationToken = default)
     {
-        var trends = await db.TechnologyTrends
-            .AsNoTracking()
-            .Where(t =>
-                (t.Direction == TrendDirection.Rising || t.Direction == TrendDirection.Stable) &&
-                t.RelevanceScore >= 0.4f)
-            .OrderByDescending(t => t.RelevanceScore)
-            .Take(maxResults * 3) // Fetch more, then filter by keyword relevance
-            .ToListAsync(cancellationToken);
-
-        // Filter by keyword relevance client-side (simple contains match)
         var keywords = stackKeywords
             .Select(k => k.Trim().ToLowerInvariant())
             .Where(k => k.Length > 1)
             .ToArray();
 
-        if (keywords.Length > 0)
-        {
-            trends = trends
+        // Fetch ALL qualifying trends first, THEN filter by keyword client-side.
+        // A pre-filter Take() would discard keyword-relevant trends that have lower scores than
+        // unrelated top-scoring trends (e.g., 30 "System Design" trends at 0.95 blocking 10
+        // "Testing" trends at 0.88 from ever reaching the keyword filter).
+        var allTrends = await db.TechnologyTrends
+            .AsNoTracking()
+            .Where(t =>
+                (t.Direction == TrendDirection.Rising || t.Direction == TrendDirection.Stable) &&
+                t.RelevanceScore >= 0.4f)
+            .OrderByDescending(t => t.RelevanceScore)
+            .ToListAsync(cancellationToken);
+
+        var trends = keywords.Length > 0
+            ? allTrends
                 .Where(t =>
                     keywords.Any(kw =>
                         t.Name.Contains(kw, StringComparison.OrdinalIgnoreCase) ||
                         (t.Description?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false) ||
                         t.Category.ToString().Contains(kw, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-        }
-
-        trends = trends.Take(maxResults).ToList();
+                .Take(maxResults)
+                .ToList()
+            : allTrends.Take(maxResults).ToList();
 
         if (trends.Count == 0)
         {
