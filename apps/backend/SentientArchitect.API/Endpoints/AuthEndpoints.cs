@@ -36,9 +36,12 @@ public class AuthEndpoints : IEndpointModule
         var login = group.MapPost("/login", async (
             [FromBody] LoginRequest body,
             [FromServices] LoginUseCase useCase,
+            HttpContext httpContext,
             CancellationToken ct) =>
         {
             var result = await useCase.ExecuteAsync(body, ct);
+            if (!result.Succeeded)
+                httpContext.Items["login:failed"] = true;
             return ToLoginResult(result);
         })
         .WithName("Login")

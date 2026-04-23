@@ -23,7 +23,9 @@ internal sealed class LoginFailedByEmailFilter(
 
         var result = await next(ctx);
 
-        if (IsFailedLogin(result))
+        var failed = ctx.HttpContext.Items.ContainsKey("login:failed");
+
+        if (failed)
         {
             tracker.RecordFailure(request.Email);
 
@@ -37,9 +39,6 @@ internal sealed class LoginFailedByEmailFilter(
 
         return result;
     }
-
-    private static bool IsFailedLogin(object? result) =>
-        result is Microsoft.AspNetCore.Http.HttpResults.UnauthorizedHttpResult;
 
     private static IResult BuildRejection(string email, TimeSpan retryAfter) =>
         new AuthRateLimitRejectedResult(
