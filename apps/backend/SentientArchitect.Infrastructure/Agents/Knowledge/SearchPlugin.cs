@@ -35,7 +35,10 @@ public sealed class SearchPlugin(
         if (results.Any())
         {
             searchLines.AddRange(results.Select((r, i) =>
-                $"{i + 1}. [Project Rule: {r.Title}] [Relevance: {r.Score:F2}]\nContext: {r.ChunkText}"));
+            {
+                var urlPart = !string.IsNullOrWhiteSpace(r.SourceUrl) ? $" [Source: {r.SourceUrl}]" : "";
+                return $"{i + 1}. [Project Rule: {r.Title}]{urlPart} [Relevance: {r.Score:F2}]\nContext: {r.ChunkText}";
+            }));
         }
 
         // 2. Keyword Fallback (Atomic keywords) - ALWAYS do keywords too to be safe
@@ -65,7 +68,8 @@ public sealed class SearchPlugin(
                     var preview = m.OriginalContent.Length > 800
                         ? string.Concat(m.OriginalContent.AsSpan(0, 800), "…")
                         : m.OriginalContent;
-                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}] (Detected via keywords: {string.Join(", ", keywords)})\nContent: {preview}");
+                    var urlPart = !string.IsNullOrWhiteSpace(m.SourceUrl) ? $" [Source: {m.SourceUrl}]" : "";
+                    searchLines.Add($"{searchLines.Count + 1}. [Project Rule: {m.Title}]{urlPart} (Detected via keywords: {string.Join(", ", keywords)})\nContent: {preview}");
                 }
             }
         }
