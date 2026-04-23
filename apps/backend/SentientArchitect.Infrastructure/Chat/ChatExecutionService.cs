@@ -318,7 +318,9 @@ public sealed class ChatExecutionService(
             "'[Trend: {name} {↑/→}] — {why relevant to THIS project} → {first concrete adoption step}'. " +
             "Only include trends that are compatible with the detected architecture patterns.\n" +
             "23. If any knowledge base rule has a [Source: <url>] field, include those URLs ONLY at the very end of your response " +
-            "under a '**Fuentes**' section as a markdown list. Do NOT inline the URLs in the body of your response. " +
+            "under a '**Fuentes**' section as a markdown list using this exact format: '- [Title](url)'. " +
+            "Use the rule title as the link text. Do NOT inline URLs in the body of your response. " +
+            "Do NOT write bare URLs — always use markdown link syntax [text](url). " +
             "Only include sources from this response — do not repeat sources from previous messages in the conversation.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
