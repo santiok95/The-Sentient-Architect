@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { LoginForm } from './_components/LoginForm'
 
 export const metadata: Metadata = { title: 'Iniciar sesión' }
@@ -27,24 +26,13 @@ export default function LoginPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-base">Bienvenido de nuevo</CardTitle>
-            <CardDescription className="text-xs">
-              Ingresá tus credenciales para acceder a tu base de conocimiento.
-            </CardDescription>
+            <CardTitle className="font-heading text-base">Bienvenido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Suspense>
               <LoginForm />
             </Suspense>
           </CardContent>
-          <CardFooter className="justify-center pt-0">
-            <p className="text-xs text-muted-foreground">
-              ¿No tenés cuenta?{' '}
-              <Link href="/register" className="text-primary underline underline-offset-2 hover:text-primary/80">
-                Registrate
-              </Link>
-            </p>
-          </CardFooter>
         </Card>
       </div>
     </div>

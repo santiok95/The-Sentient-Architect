@@ -10,22 +10,30 @@ public class ExecuteChatUseCase(
     IApplicationDbContext db,
     SaveMessageUseCase saveMessageUseCase,
     IChatExecutionService chatExecutionService,
+    IConversationStreamPublisher streamPublisher,
     IOptions<ConversationOptions> options)
 {
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
         ExecuteChatRequest request,
-        Func<string, CancellationToken, Task>? onToken = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
-            return Result<ChatExecutionResponse>.Failure(["Message is required."], ErrorType.Validation);
+            return await PublishFailureAsync(
+                request.ConversationId,
+                ["Message is required."],
+                ErrorType.Validation,
+                ct);
 
         var conversation = await db.Conversations
             .Include(c => c.Messages)
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == request.UserId, ct);
 
         if (conversation is null)
-            return Result<ChatExecutionResponse>.Failure(["Conversation not found."], ErrorType.NotFound);
+            return await PublishFailureAsync(
+                request.ConversationId,
+                ["Conversation not found."],
+                ErrorType.NotFound,
+                ct);
 
         if (request.ActiveRepositoryId.HasValue ||
             request.ContextMode.HasValue ||
@@ -45,9 +53,11 @@ public class ExecuteChatUseCase(
             ct);
 
         if (!saveUserMessageResult.Succeeded || saveUserMessageResult.Data is null)
-            return Result<ChatExecutionResponse>.Failure(
+            return await PublishFailureAsync(
+                request.ConversationId,
                 saveUserMessageResult.Errors,
-                saveUserMessageResult.ErrorType);
+                saveUserMessageResult.ErrorType,
+                ct);
 
         // Count only messages since the last compaction to avoid perpetual re-compaction
         var messagesForThreshold = conversation.LastCompactedAt.HasValue
@@ -56,6 +66,7 @@ public class ExecuteChatUseCase(
 
         var shouldCompact = messagesForThreshold >= options.Value.CompactionThreshold;
 
+        var streamedAnyToken = false;
         var executionResult = await chatExecutionService.ExecuteAsync(
             new ChatExecutionRequest(
                 request.ConversationId,
@@ -66,11 +77,27 @@ public class ExecuteChatUseCase(
                 request.ContextMode,
                 shouldCompact),
             saveUserMessageResult.Data,
-            onToken,
+            async (token, tokenCt) =>
+            {
+                streamedAnyToken = true;
+                await streamPublisher.PublishTokenAsync(request.ConversationId, token, tokenCt);
+            },
             ct);
 
         if (!executionResult.Succeeded || executionResult.Data is null)
-            return Result<ChatExecutionResponse>.Failure(executionResult.Errors, executionResult.ErrorType);
+            return await PublishFailureAsync(
+                request.ConversationId,
+                executionResult.Errors,
+                executionResult.ErrorType,
+                ct);
+
+        if (!streamedAnyToken && !string.IsNullOrWhiteSpace(executionResult.Data.AssistantMessage))
+        {
+            await streamPublisher.PublishTokenAsync(
+                request.ConversationId,
+                executionResult.Data.AssistantMessage,
+                ct);
+        }
 
         var saveAssistantMessageResult = await saveMessageUseCase.ExecuteAsync(
             new SaveMessageRequest(
@@ -82,10 +109,24 @@ public class ExecuteChatUseCase(
             ct);
 
         if (!saveAssistantMessageResult.Succeeded)
-            return Result<ChatExecutionResponse>.Failure(
+            return await PublishFailureAsync(
+                request.ConversationId,
                 saveAssistantMessageResult.Errors,
-                saveAssistantMessageResult.ErrorType);
+                saveAssistantMessageResult.ErrorType,
+                ct);
+
+        await streamPublisher.PublishCompleteAsync(request.ConversationId, ct);
 
         return executionResult;
+    }
+
+    private async Task<Result<ChatExecutionResponse>> PublishFailureAsync(
+        Guid conversationId,
+        List<string> errors,
+        ErrorType errorType,
+        CancellationToken ct)
+    {
+        await streamPublisher.PublishErrorAsync(conversationId, string.Join("; ", errors), ct);
+        return Result<ChatExecutionResponse>.Failure(errors, errorType);
     }
 }

@@ -92,6 +92,7 @@ public static class InfrastructureServiceExtensions
         services.AddHttpContextAccessor();
 
         // ── Identity services ────────────────────────────────────────────────
+        services.AddScoped<IAuthIdentityService, IdentityAuthService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IUserAccessor, UserAccessor>();
         services.AddScoped<IUserService, UserService>();
@@ -178,6 +179,7 @@ public static class InfrastructureServiceExtensions
             sp.GetService<IChatCompletionService>(),
             sp.GetRequiredService<ILogger<TrendScanner>>()));
         services.AddHostedService<TrendScannerService>();
+        services.AddHostedService<RepositoryAnalysisQueueWorker>();
 
         // ── Code Guardian ─────────────────────────────────────────────────────────
         services.AddScoped<ICodeAnalyzer, CodeAnalyzer>();

@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\SentientArchitect.Application\SentientArchitect.Application.csproj" />
     <ProjectReference Include="..\..\SentientArchitect.Data\SentientArchitect.Data.csproj" />
     <ProjectReference Include="..\..\SentientArchitect.Infrastructure\SentientArchitect.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\SentientArchitect.API\SentientArchitect.API.csproj" />
   </ItemGroup>
 
 </Project>

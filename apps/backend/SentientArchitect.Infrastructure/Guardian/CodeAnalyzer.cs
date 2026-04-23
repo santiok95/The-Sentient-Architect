@@ -15,7 +15,7 @@ public sealed class CodeAnalyzer(
     IAnalysisProgressReporter reporter,
     ILogger<CodeAnalyzer> logger) : ICodeAnalyzer
 {
-    public async Task AnalyzeAsync(Guid repositoryInfoId, CancellationToken ct = default)
+    public async Task AnalyzeAsync(Guid repositoryInfoId, Guid? reportId = null, CancellationToken ct = default)
     {
         AnalysisReport? report = null;
         string? clonePath = null;
@@ -31,10 +31,23 @@ public sealed class CodeAnalyzer(
                 return;
             }
 
-            // Create report
-            report = new AnalysisReport(repositoryInfoId);
-            db.AnalysisReports.Add(report);
-            await db.SaveChangesAsync(ct);
+            if (reportId.HasValue)
+            {
+                report = await db.AnalysisReports
+                    .Include(r => r.Findings)
+                    .FirstOrDefaultAsync(r => r.Id == reportId.Value && r.RepositoryInfoId == repositoryInfoId, ct);
+            }
+
+            if (report is null)
+            {
+                report = new AnalysisReport(repositoryInfoId);
+                db.AnalysisReports.Add(report);
+                await db.SaveChangesAsync(ct);
+            }
+            else if (report.Findings.Count > 0)
+            {
+                db.AnalysisFindings.RemoveRange(report.Findings);
+            }
 
             report.MarkInProgress();
             await db.SaveChangesAsync(ct);

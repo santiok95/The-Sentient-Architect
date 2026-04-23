@@ -11,10 +11,16 @@ public class GetAnalysisReportUseCase(IApplicationDbContext db)
         GetAnalysisReportRequest request,
         CancellationToken ct = default)
     {
+        var repositoryIds = db.Repositories
+            .Where(r => r.UserId == request.UserId)
+            .Select(r => r.Id);
+
         var report = await db.AnalysisReports
             .Include(r => r.Findings)
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == request.ReportId, ct);
+            .FirstOrDefaultAsync(
+                r => r.Id == request.ReportId && repositoryIds.Contains(r.RepositoryInfoId),
+                ct);
 
         if (report is null)
             return Result<GetAnalysisReportResponse>.Failure([$"Report '{request.ReportId}' not found."], ErrorType.NotFound);

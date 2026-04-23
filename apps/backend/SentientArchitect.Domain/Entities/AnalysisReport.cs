@@ -31,12 +31,28 @@ public class AnalysisReport : BaseEntity
     public void MarkInProgress()
     {
         Status = AnalysisStatus.InProgress;
+        CompletedAt = null;
+        ErrorMessage = null;
+        Summary = null;
+        TotalFindings = 0;
+        CriticalFindings = 0;
+    }
+
+    public void MarkPending()
+    {
+        Status = AnalysisStatus.Pending;
+        CompletedAt = null;
+        ErrorMessage = null;
+        Summary = null;
+        TotalFindings = 0;
+        CriticalFindings = 0;
     }
 
     public void Complete(string summary, int total, int critical)
     {
         Status = AnalysisStatus.Completed;
         CompletedAt = DateTime.UtcNow;
+        ErrorMessage = null;
         Summary = summary;
         TotalFindings = total;
         CriticalFindings = critical;

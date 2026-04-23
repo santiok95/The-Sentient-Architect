@@ -227,7 +227,7 @@ public sealed class ChatExecutionService(
 
         // Plugins share the same scoped DbContext; keep this flow sequential to avoid
         // "A second operation was started on this context instance" concurrency errors.
-        var userProfile = await profilePlugin.GetUserProfileAsync(userId.ToString(), ct);
+        var userProfile = await profilePlugin.GetUserProfileAsync(ct);
         var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
             request.ConversationId.ToString(),
             ct);
@@ -316,7 +316,12 @@ public sealed class ChatExecutionService(
             "21. When context mode is RepoBound and the repository has an ABOUT.md intent, use it to frame recommendations in terms of the author's stated vision.\n" +
             "22. When producing modernization suggestions, format each trend bullet as: " +
             "'[Trend: {name} {↑/→}] — {why relevant to THIS project} → {first concrete adoption step}'. " +
-            "Only include trends that are compatible with the detected architecture patterns.");
+            "Only include trends that are compatible with the detected architecture patterns.\n" +
+            "23. If any knowledge base rule has a [Source: <url>] field, include those URLs ONLY at the very end of your response " +
+            "under a '**Fuentes**' section as a markdown list using this exact format: '- [Title](url)'. " +
+            "Use the rule title as the link text. Do NOT inline URLs in the body of your response. " +
+            "Do NOT write bare URLs — always use markdown link syntax [text](url). " +
+            "Only include sources from this response — do not repeat sources from previous messages in the conversation.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);

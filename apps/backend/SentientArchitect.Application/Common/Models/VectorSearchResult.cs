@@ -8,4 +8,5 @@ public record VectorSearchResult(
     string Title,
     int ChunkIndex,
     string ChunkText,
-    float Score);
+    float Score,
+    string? SourceUrl = null);

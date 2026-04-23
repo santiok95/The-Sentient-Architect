@@ -30,6 +30,195 @@
 
 ---
 
+## Decisiones Acordadas — 2026-04-17
+
+Estas decisiones quedaron aceptadas como direccion de trabajo, aunque varias todavia no esten implementadas.
+
+### Multi-tenancy por grupo de trabajo
+
+- `TenantId` por grupo/equipo es un requerimiento valido, pero no entra en el bloque urgente del MVP.
+- La asignacion de `TenantId` quedara a cargo del registro o de administracion por parte de un admin.
+- El esqueleto actual se mantiene, pero no se toma como prioridad inmediata de remediacion.
+
+### Auth / session target
+
+- Mantener el concepto de `refresh token`; no eliminarlo.
+- `access token` objetivo: 2 horas.
+- `refresh token` en cookie `httpOnly`.
+- `secure` y `sameSite` definidos segun el despliegue real.
+- Sesiones revocables en servidor.
+- `logout` real.
+- Refresh rotation con deteccion de reuse.
+- En el corto plazo, endurecer validaciones de login/refresh (`IsActive`, validaciones del token) aunque el rediseño completo quede como incremento.
+
+### CORS
+
+- En no produccion, permitir solo origenes locales necesarios.
+- Incluir `https://ai-lab.santiagoniveyro.online` como origen permitido.
+- No volver a una politica abierta para cualquier origin con credenciales.
+
+### Jobs pesados de analisis
+
+- Priorizar persistencia y control por sobre velocidad de cola.
+- Direccion aceptada: jobs respaldados por PostgreSQL antes que Redis.
+- Quitar `Task.Run` desde endpoints como objetivo de arquitectura.
+
+### Rate limiting / throttling target
+
+- Auth: limite por IP y por identificador de login.
+- Chat: limite por usuario y tenant, mas control de concurrencia.
+- Analisis de repositorios: cola + concurrencia maxima; no solo rate limiting.
+- Endpoints costosos con IA: cuota y throttling por usuario/tenant, no solo por IP.
+
+---
+
+## Hallazgos Recontextualizados — evitar falsos positivos
+
+Estas notas existen para que futuras auditorias u orquestaciones no vuelvan a interpretar algunos puntos sin el contexto que ya fue aclarado.
+
+### Credenciales en `appsettings`
+
+- El repo actual contiene valores con forma de secreto en archivos de configuracion.
+- **Contexto aclarado por el usuario:** no se considera incidente confirmado de credenciales reales expuestas; esos valores fueron usados como moldes/ejemplos y no representan secretos vigentes pusheados de forma efectiva.
+- Conclusion correcta para auditorias futuras: marcarlo como **riesgo aparente / hallazgo dependiente de contexto**, no como compromiso confirmado, salvo nueva evidencia.
+
+### Multi-tenancy por `TenantId`
+
+- El diseño objetivo es `TenantId` por grupo de trabajo, con administracion posterior desde registro o por accion de un admin.
+- **Contexto aclarado por el usuario:** esto no era parte del bloque urgente del MVP, sino un incremento posterior con esqueleto inicial ya preparado.
+- Conclusion correcta para auditorias futuras: tratarlo como **deuda/incremento planificado**, no como bug critico inmediato, salvo que la funcionalidad multi-tenant grupal ya se declare activa.
+
+### FluentValidation
+
+- Existe infraestructura base para validators y endpoint filter, pero no se toma como prioridad inmediata.
+- **Contexto aclarado por el usuario:** FluentValidation se usaba para limites de texto y validaciones menores, y queda explicitamente diferido.
+- Conclusion correcta para auditorias futuras: no elevar FluentValidation a bloqueante ni a remediacion urgente en esta etapa.
+
+---
+
+## Plan de Ejecucion por Fases
+
+La remediacion debe hacerse por fases para evitar retrabajo y para verificar que cada cambio no rompa ni frontend ni backend.
+
+### Fase 0 — Alineacion de contratos y decisiones
+
+**Objetivo:** cerrar la ambiguedad antes de tocar flujos criticos.
+
+**Incluye:**
+- documentar las decisiones aceptadas
+- dejar claro que auth debe converger al patron `endpoint fino -> use case -> result`
+- identificar hardcodes que deben venir de configuracion
+
+**Ejemplo de aplicacion:**
+- `AuthEndpoints` hoy mezcla transporte HTTP con reglas criticas de sesion
+- antes de refactorizar, se define que login, refresh, logout y register van a tener su propio use case
+- tambien se identifican valores hardcodeados como `expiresDays = 7` en el endpoint, que no deberian vivir ahi cuando `TokenService` ya lee expiracion desde configuracion
+
+**Criterio anti-regresion:**
+- no cambia ningun contrato HTTP todavia
+- no cambia payload de frontend
+- no cambia comportamiento observable; solo se deja la ruta de trabajo definida
+
+### Fase 1 — Ownership y autorizacion por recurso
+
+**Objetivo:** cerrar acceso indebido sin tocar semantica de UI.
+
+**Incluye:**
+- `GetRepositoryAnalysis`
+- `GetRepositoryReports`
+- `GetAnalysisReport`
+- cualquier otro read sensible por id que hoy no filtre por `UserId`
+
+**Ejemplo de aplicacion:**
+- el endpoint sigue siendo el mismo para el frontend
+- el endpoint solo agrega `UserId` al request del use case
+- el use case hace el filtro correcto y devuelve `NotFound` o `Forbidden` segun la estrategia elegida
+
+**Como verificar que no rompe:**
+- backend: tests de autorizacion por recurso
+- frontend: las pantallas existentes siguen pegando al mismo endpoint y recibiendo la misma forma de respuesta cuando el recurso si pertenece al usuario
+- smoke test manual: listar repos, abrir analisis propio, abrir reportes propios
+
+### Fase 2 — Endurecimiento minimo de auth sin rediseño total
+
+**Objetivo:** mejorar seguridad y homogeneidad sin obligar a rediseñar toda la sesion todavia.
+
+**Incluye:**
+- validar `IsActive` tambien en login
+- endurecer validaciones de refresh actuales
+- sacar hardcodes del endpoint y moverlos a opciones/configuracion donde corresponda
+- empezar a encapsular login/register/refresh/logout en use cases
+
+**Ejemplo de aplicacion:**
+- `LoginUseCase` decide si un usuario puede autenticarse
+- el endpoint queda solo para leer body y devolver HTTP/cookies
+- el frontend no cambia su request de login en esta fase
+
+**Como verificar que no rompe:**
+- backend: tests de login activo/inactivo, refresh valido/invalido
+- frontend: login actual sigue funcionando con mismo shape de respuesta en esta fase
+- manual: login, refresh, logout, reconexion de hubs
+
+### Fase 3 — Jobs persistidos y control de concurrencia
+
+**Objetivo:** sacar `Task.Run` del request pipeline y pasar a un modelo confiable.
+
+**Incluye:**
+- cola respaldada por PostgreSQL
+- worker dedicado o capa de procesamiento con concurrencia maxima
+- estado del job persistido
+
+**Ejemplo de aplicacion:**
+- `POST /repositories/{id}/analyze` sigue devolviendo `202`
+- pero en vez de lanzar un `Task.Run`, persiste el job y el worker lo toma
+- para el frontend, el contrato visible puede seguir igual mientras mejore la garantia operativa
+
+**Como verificar que no rompe:**
+- backend: tests de encolado, ejecucion e idempotencia basica
+- frontend: sigue mostrando progreso por los mismos canales
+- manual: disparar analisis, reiniciar proceso, verificar que el trabajo no desaparece semanticamente
+
+### Fase 4 — Rate limiting, quotas y proteccion de costo
+
+**Objetivo:** proteger auth, chat y endpoints costosos cuando la base critica ya este mas sana.
+
+**Incluye:**
+- limite por IP e identificador en auth
+- limite por usuario/tenant en chat
+- cuota/throttling en endpoints costosos con IA
+- concurrencia maxima para analisis
+
+**Ejemplo de aplicacion:**
+- auth responde `429` cuando un origen o identificador excede el limite
+- chat limita bursts por usuario/tenant sin cambiar el contrato funcional principal
+- analisis no acepta trabajo infinito en paralelo
+
+**Como verificar que no rompe:**
+- backend: tests de politicas y thresholds
+- frontend: manejo controlado de `429` y mensajes de retry
+- observabilidad: logs/metricas de rechazos, bursts y consumo
+
+### Fase 5 — Rediseño completo de sesion y refresh rotation
+
+**Objetivo:** llegar al target acordado de sesion real sin mezclarlo con fixes urgentes.
+
+**Incluye:**
+- `access token` de 2 horas
+- `refresh token` en cookie `httpOnly`
+- sesion revocable en servidor
+- `logout` real
+- refresh rotation con deteccion de reuse
+
+**Ejemplo de aplicacion:**
+- el frontend deja de depender de transportar refresh token como hoy
+- backend controla sesiones y reuse detection desde una fuente de verdad server-side
+
+**Como verificar que no rompe:**
+- backend: tests de rotacion, revocacion y reuse detection
+- frontend: login/refresh/logout probados en browser real
+- manual: expirar access token, refrescar, logout, reuso de refresh comprometido
+
+
 ## BLOQUE 0 — Seguridad crítica
 
 > No negociable. Fixes pequeños, impacto máximo.
@@ -96,6 +285,22 @@
 - Al hacer `/auth/refresh`: invalidar el token anterior, emitir uno nuevo (rotation)
 - Al hacer `/auth/logout`: invalidar el refresh token activo
 - Impacto: moderado — toca el auth flow completo
+
+**Decisión objetivo acordada:**
+- `access token` de 2 horas
+- `refresh token` en cookie `httpOnly`
+- `secure` según entorno/despliegue real
+- `sameSite` definido explícitamente según estrategia de frontend y dominio
+- sesión revocable en servidor
+- `logout` real que invalide la sesión activa
+- rotation de refresh token con detección de reuse
+
+**Notas de implementación:**
+- No eliminar el concepto de refresh token; dejar el esqueleto actual como transición, pero no darlo por resuelto.
+- Persistir solo hash del refresh token, nunca el valor plano.
+- El refresh token debe estar asociado a una sesión/dispositivo para poder revocar con precisión.
+- `IsActive` debe validarse tanto en login como en refresh.
+- Si se detecta reuse de refresh token, invalidar la sesión comprometida y registrar evento de seguridad.
 
 ---
 

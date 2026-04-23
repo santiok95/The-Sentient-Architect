@@ -21,7 +21,7 @@ const PROTECTED_PATHS = [
   '/admin',
 ]
 
-const AUTH_PATHS = ['/login', '/register']
+const AUTH_PATHS = ['/login']
 
 const AUTH_COOKIE = 'sa_token'
 

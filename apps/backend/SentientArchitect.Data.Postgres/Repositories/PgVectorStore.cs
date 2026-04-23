@@ -109,7 +109,8 @@ public class PgVectorStore(IApplicationDbContext context) : IVectorStore
                 x.Embedding.KnowledgeItem?.Title ?? "Untitled",
                 x.Embedding.ChunkIndex,
                 x.Embedding.ChunkText,
-                x.Score))
+                x.Score,
+                x.Embedding.KnowledgeItem?.SourceUrl))
             .ToList();
     }
 

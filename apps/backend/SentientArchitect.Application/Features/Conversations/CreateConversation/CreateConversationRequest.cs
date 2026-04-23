@@ -5,6 +5,6 @@ namespace SentientArchitect.Application.Features.Conversations.CreateConversatio
 public record CreateConversationRequest(
     Guid UserId,
     Guid TenantId,
-    string Title = "New Conversation",
+    string Title = "Nueva conversación",
     AgentType AgentType = AgentType.Knowledge,
     Guid? ActiveRepositoryId = null);

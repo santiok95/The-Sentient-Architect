@@ -16,7 +16,7 @@ const PATH_TITLES: Record<string, string> = {
   '/trends': 'Trends Radar',
   // TODO: Uncomment when /admin/users is implemented
   // '/admin/users': 'Users',
-  '/admin/publish-requests': 'Publish Requests',
+  '/admin/publish-requests': 'Solicitudes de publicación',
   // TODO: Uncomment when /settings is implemented
   // '/settings': 'Settings',
 }

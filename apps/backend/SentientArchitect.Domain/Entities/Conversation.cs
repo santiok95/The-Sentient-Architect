@@ -5,7 +5,7 @@ namespace SentientArchitect.Domain.Entities;
 
 public class Conversation : BaseEntity
 {
-    public Conversation(Guid userId, Guid tenantId, string title = "New Conversation", AgentType agentType = AgentType.Knowledge)
+    public Conversation(Guid userId, Guid tenantId, string title = "Nueva conversación", AgentType agentType = AgentType.Knowledge)
     {
         UserId = userId;
         TenantId = tenantId;

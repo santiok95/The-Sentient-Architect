@@ -40,7 +40,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('Code Guardian')).toBeInTheDocument()
     expect(screen.getByText('Trends Radar')).toBeInTheDocument()
     expect(screen.getByText('Users')).toBeInTheDocument()
-    expect(screen.getByText('Publish Requests')).toBeInTheDocument()
+    expect(screen.getByText('Solicitudes de publicación')).toBeInTheDocument()
     expect(screen.getByText('Settings')).toBeInTheDocument()
   })
 
@@ -77,7 +77,7 @@ describe('Sidebar', () => {
   it('renders the brand logo text', () => {
     render(<Sidebar />)
     expect(screen.getByText('Sentient Architect')).toBeInTheDocument()
-    expect(screen.getByText('Knowledge Platform')).toBeInTheDocument()
+    expect(screen.getByText('Plataforma de conocimiento')).toBeInTheDocument()
   })
 
   it('closes the mobile sidebar when pathname changes (navigation guard)', () => {

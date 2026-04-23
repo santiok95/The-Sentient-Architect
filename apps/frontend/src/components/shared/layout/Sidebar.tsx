@@ -63,7 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       // TODO: Implement /admin/users page
       // { label: 'Users', href: '/admin/users', Icon: Users },
-      { label: 'Publish Requests', href: '/admin/publish-requests', Icon: Rss, badge: '3', badgeVariant: 'red' },
+      { label: 'Solicitudes de publicación', href: '/admin/publish-requests', Icon: Rss, badge: '3', badgeVariant: 'red' },
     ],
   },
   {
@@ -154,7 +154,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
             Sentient Architect
           </div>
           <div className="font-mono text-[9.5px] tracking-[0.8px] uppercase text-muted-foreground leading-tight">
-            Knowledge Platform
+            Plataforma de conocimiento
           </div>
         </div>
       </div>
