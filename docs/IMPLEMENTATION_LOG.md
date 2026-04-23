@@ -6,6 +6,20 @@
 - 📋 Planned
 - 🐛 Issue Found
 
+## Feature Log — Radar Conversational Agent (2026-04-23)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| AgentType enum extended | ✅ | Added `Radar = 2` in Domain enum (stored as string, no migration required) |
+| Radar agent kernel factory | ✅ | Added `RadarAgentFactory` with `TrendsPlugin` + `SearchPlugin` only |
+| Infrastructure DI registration | ✅ | Registered `RadarAgentFactory` as singleton |
+| Chat execution routing | ✅ | `ChatExecutionService` now routes with `AgentType` switch for Knowledge/Consultant/Radar |
+| Radar system prompt | ✅ | Added trend-first prompt with explicit `[Radar]` / `[Brain]` attribution and conflict policy |
+| Deterministic radar flow | ✅ | Added `RunDeterministicRadarFlowAsync` streaming path |
+| Frontend schemas and types | ✅ | Added `'Radar'` to `createConversationSchema`, `AgentType` union, hooks and mocks |
+| New conversation dropdown | ✅ | Added Radar option with icon and direct create flow (no repo picker) |
+| Unit tests updated | ✅ | Added `ExecuteChatUseCase` test to verify Radar `AgentType` forwarding |
+
 ## Phase 0 — Analysis & Design (Current)
 
 | Item | Status | Notes |

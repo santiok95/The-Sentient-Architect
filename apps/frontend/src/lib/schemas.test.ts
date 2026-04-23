@@ -3,6 +3,7 @@ import {
   loginSchema,
   registerSchema,
   ingestKnowledgeSchema,
+  createConversationSchema,
   sendMessageSchema,
   submitRepoSchema,
 } from '@/lib/schemas'
@@ -121,5 +122,14 @@ describe('Consultant schemas', () => {
     if (result.success) {
       expect(result.data.contextMode).toBeUndefined()
     }
+  })
+
+  it('createConversationSchema: accepts Radar agent type', () => {
+    const result = createConversationSchema.safeParse({
+      title: 'Radar session',
+      agentType: 'Radar',
+    })
+
+    expect(result.success).toBe(true)
   })
 })

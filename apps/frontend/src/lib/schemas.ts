@@ -66,7 +66,7 @@ export const sendMessageSchema = z.object({
 
 export const createConversationSchema = z.object({
   title: z.string().max(128).optional(),
-  agentType: z.enum(['Knowledge', 'Consultant']).default('Knowledge'),
+  agentType: z.enum(['Knowledge', 'Consultant', 'Radar']).default('Knowledge'),
   activeRepositoryId: z.string().uuid().optional(),
 })
 
@@ -124,7 +124,7 @@ export type IngestKnowledgeInput = z.infer<typeof ingestKnowledgeSchema>
 export type KnowledgeSearchInput = z.infer<typeof knowledgeSearchSchema>
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type CreateConversationInput = z.infer<typeof createConversationSchema>
-export type AgentType = 'Knowledge' | 'Consultant'
+export type AgentType = 'Knowledge' | 'Consultant' | 'Radar'
 export type ContextMode = 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
 export type SubmitRepoInput = z.infer<typeof submitRepoSchema>
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>

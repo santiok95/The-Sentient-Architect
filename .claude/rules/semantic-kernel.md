@@ -48,6 +48,11 @@ public class SearchPlugin
 - Keep Instructions concise — long prompts degrade response quality
 - Each agent's Instructions should explicitly state what plugins it has and when to use them
 
+## Conversational Agents
+- Knowledge Agent: `SearchPlugin` + `IngestPlugin`
+- Consultant Agent: `ProfilePlugin` + `SummaryPlugin` + `SearchPlugin` + `RepositoryContextPlugin` + `TrendsPlugin`
+- Radar Agent: `TrendsPlugin` + `SearchPlugin` (trend-first, brain as validator)
+
 ## Conversation Management
 - Use `ChatHistory` to maintain message history within a session
 - Implement ConversationSummary compaction when history exceeds token threshold

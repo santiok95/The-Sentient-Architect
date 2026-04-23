@@ -17,10 +17,12 @@ public sealed class ChatExecutionService(
     IServiceProvider services,
     KnowledgeAgentFactory knowledgeFactory,
     ConsultantAgentFactory consultantFactory,
+    RadarAgentFactory radarFactory,
     SearchPlugin searchPlugin,
     ProfilePlugin profilePlugin,
     SummaryPlugin summaryPlugin,
     RepositoryContextPlugin repositoryContextPlugin,
+    TrendsPlugin trendsPlugin,
     IApplicationDbContext db,
     IUserAccessor userAccessor,
     IIntentExtractor intentExtractor) : IChatExecutionService
@@ -84,6 +86,34 @@ public sealed class ChatExecutionService(
               NEVER suggest a trend that contradicts an established architecture convention.
         """;
 
+     private const string RadarSystemPrompt = """
+          You are the Radar Agent for The Sentient Architect.
+          Your purpose is to provide trend-driven recommendations with transparent source attribution.
+          You have access to:
+          - Trends-GetRelevantTrends: primary source of ecosystem trend data.
+          - Search-SearchByMeaning: secondary validation source against the user's documented project rules.
+
+          MANDATORY RULES:
+          1. ALWAYS call Trends-GetRelevantTrends first for trend questions.
+          2. Use Search-SearchByMeaning only AFTER trends are retrieved, and only to validate conflicts with the user's documented rules.
+          3. Every factual line must include explicit source attribution:
+              - Use [Radar] for trend data from Trends-GetRelevantTrends.
+              - Use [Brain] for knowledge-base validation from Search-SearchByMeaning.
+          4. NEVER label Brain results as Radar results.
+          5. If radar trends and brain rules conflict, include a section titled exactly '## Conflicto detectado' with:
+              - trend recommendation,
+              - conflicting brain rule,
+              - final recommendation and rationale.
+          6. If trends are missing or too weak, state this explicitly and do not compensate with generic Brain-only recommendations.
+              Use: 'El radar no tiene data suficiente sobre este tema. Considera correr un scan manual.'
+          7. Use this response structure:
+              - ## Resumen
+              - ## Trends detectados
+              - ## Validacion contra tu proyecto (optional)
+              - ## Conflicto detectado (optional)
+              - ## Fuentes (only if Brain sources were used)
+          """;
+
     public async Task<Result<ChatExecutionResponse>> ExecuteAsync(
         ChatExecutionRequest request,
         IReadOnlyList<ConversationMessage> history,
@@ -92,21 +122,32 @@ public sealed class ChatExecutionService(
     {
         try
         {
-            var isConsultant = request.AgentType == Domain.Enums.AgentType.Consultant;
+            var kernel = request.AgentType switch
+            {
+                Domain.Enums.AgentType.Consultant => consultantFactory.CreateKernel(services),
+                Domain.Enums.AgentType.Radar      => radarFactory.CreateKernel(services),
+                _                                 => knowledgeFactory.CreateKernel(services),
+            };
 
-            var kernel = isConsultant
-                ? consultantFactory.CreateKernel(services)
-                : knowledgeFactory.CreateKernel(services);
+            var selectedPrompt = request.AgentType switch
+            {
+                Domain.Enums.AgentType.Consultant => ConsultantSystemPrompt,
+                Domain.Enums.AgentType.Radar      => RadarSystemPrompt,
+                _                                 => KnowledgeSystemPrompt,
+            };
 
             var chatService = kernel.GetRequiredService<IChatCompletionService>();
-            var chatHistory = BuildChatHistory(history, isConsultant ? ConsultantSystemPrompt : KnowledgeSystemPrompt);
+            var chatHistory = BuildChatHistory(history, selectedPrompt);
 
             if (request.ShouldCompact)
                 await CompactConversationAsync(request.ConversationId, chatService, chatHistory, ct);
 
-            var result = !isConsultant
-                ? await RunDeterministicKnowledgeFlowAsync(request, chatService, chatHistory, onToken, ct)
-                : await RunDeterministicConsultantFlowAsync(request, chatService, chatHistory, onToken, ct);
+            var result = request.AgentType switch
+            {
+                Domain.Enums.AgentType.Consultant => await RunDeterministicConsultantFlowAsync(request, chatService, chatHistory, onToken, ct),
+                Domain.Enums.AgentType.Radar      => await RunDeterministicRadarFlowAsync(request, chatService, chatHistory, onToken, ct),
+                _                                 => await RunDeterministicKnowledgeFlowAsync(request, chatService, chatHistory, onToken, ct),
+            };
 
             if (result.Succeeded && result.Data is not null)
                 await TrackTokenUsageAsync(request.Message, result.Data.AssistantMessage, ct);
@@ -340,6 +381,65 @@ public sealed class ChatExecutionService(
 
         return Result<ChatExecutionResponse>.SuccessWith(
             new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Consultant));
+    }
+
+    private async Task<Result<ChatExecutionResponse>> RunDeterministicRadarFlowAsync(
+        ChatExecutionRequest request,
+        IChatCompletionService chatService,
+        ChatHistory history,
+        Func<string, CancellationToken, Task>? onToken,
+        CancellationToken ct)
+    {
+        // Extract keywords from the message to filter trends (same simple strategy as SearchPlugin).
+        var stackKeywords = request.Message
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 2)
+            .Select(w => w.Trim().ToLowerInvariant())
+            .ToArray();
+
+        // 1. Call TrendsPlugin deterministically — this is the primary data source.
+        var trendsContext = await trendsPlugin.GetRelevantTrendsAsync(stackKeywords, maxResults: 10, cancellationToken: ct);
+
+        // 2. Call SearchPlugin as secondary validation source (check conflicts with brain rules).
+        var brainContext = await searchPlugin.SearchByMeaningAsync(request.Message, maxResults: 5, cancellationToken: ct);
+
+        var responseKernelBuilder = Kernel.CreateBuilder();
+        responseKernelBuilder.Services.AddSingleton(chatService);
+        var responseKernel = responseKernelBuilder.Build();
+
+        var responseHistory = new ChatHistory();
+        foreach (var item in history)
+            responseHistory.Add(item);
+
+        var contextMessage = new ChatMessageContent(
+            AuthorRole.System,
+            "Radar context — you MUST use the data below as your only factual sources:\n\n" +
+            $"## [Radar] Ecosystem trend data (PRIMARY source)\n{trendsContext}\n\n" +
+            $"## [Brain] User knowledge base (VALIDATION only — check for conflicts with trends above)\n{brainContext}\n\n" +
+            "Attribution rules (MANDATORY — never violate):\n" +
+            "1. Prefix every factual statement with [Radar] if it comes from the trend data above, or [Brain] if it comes from the knowledge base above.\n" +
+            "2. NEVER label a Brain result as [Radar]. NEVER label a Radar result as [Brain].\n" +
+            "3. If a trend above conflicts with a Brain rule, add a '## Conflicto detectado' section with: the trend, the conflicting rule, and your recommendation.\n" +
+            "4. If the Radar data above is empty or says 'No hay trends', state exactly: 'El radar no tiene data suficiente sobre este tema. Considera correr un scan manual.' Do NOT compensate with Brain data or general knowledge.\n" +
+            "5. Use this structure: ## Resumen / ## Trends detectados / ## Validacion contra tu proyecto (optional) / ## Conflicto detectado (optional) / ## Fuentes (only if Brain sources have URLs).");
+
+        if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
+            responseHistory.Insert(1, contextMessage);
+        else
+            responseHistory.Insert(0, contextMessage);
+
+        var responseBuilder = new System.Text.StringBuilder();
+        var noToolSettings  = new PromptExecutionSettings();
+
+        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
+        {
+            if (string.IsNullOrEmpty(chunk.Content)) continue;
+            responseBuilder.Append(chunk.Content);
+            if (onToken is not null) await onToken(chunk.Content, ct);
+        }
+
+        return Result<ChatExecutionResponse>.SuccessWith(
+            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Radar));
     }
 
     private static string? FirstNonEmpty(params string?[] values)

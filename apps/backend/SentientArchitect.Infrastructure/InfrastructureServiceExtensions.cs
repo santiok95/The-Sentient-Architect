@@ -162,6 +162,7 @@ public static class InfrastructureServiceExtensions
         // ── Agent Factories (Singleton — plugins injected per-request via Create()) ──
         services.AddSingleton<KnowledgeAgentFactory>();
         services.AddSingleton<ConsultantAgentFactory>();
+        services.AddSingleton<RadarAgentFactory>();
 
         // ── Chat orchestration adapters ─────────────────────────────────────
         services.AddScoped<AnthropicOrchestrator>();

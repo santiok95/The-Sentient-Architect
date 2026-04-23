@@ -43,6 +43,7 @@ function repoShortName(gitUrl: string) {
 const AGENT_LABELS: Record<AgentType, string> = {
   Knowledge: 'Knowledge',
   Consultant: 'Consultant',
+  Radar: 'Radar',
 }
 
 const CONTEXT_MODE_LABELS: Record<ContextMode, string> = {

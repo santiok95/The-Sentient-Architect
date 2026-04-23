@@ -127,10 +127,36 @@ public class ExecuteChatUseCaseTests : TestBase
             .PublishCompleteAsync(default, default);
     }
 
-    private async Task<Conversation> CreateConversationAsync()
+    [Fact]
+    public async Task ExecuteAsync_ShouldForwardRadarAgentType_WhenConversationAgentIsRadar()
+    {
+        var conversation = await CreateConversationAsync(AgentType.Radar);
+
+        _chatExecutionService
+            .ExecuteAsync(
+                Arg.Any<ChatExecutionRequest>(),
+                Arg.Any<IReadOnlyList<ConversationMessage>>(),
+                Arg.Any<Func<string, CancellationToken, Task>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Result<ChatExecutionResponse>.SuccessWith(
+                new ChatExecutionResponse("Radar response", AgentType.Radar)));
+
+        var result = await _sut.ExecuteAsync(
+            new ExecuteChatRequest(conversation.Id, conversation.UserId, "Tendencias en testing"));
+
+        result.Succeeded.Should().BeTrue();
+
+        await _chatExecutionService.Received(1).ExecuteAsync(
+            Arg.Is<ChatExecutionRequest>(r => r.AgentType == AgentType.Radar),
+            Arg.Any<IReadOnlyList<ConversationMessage>>(),
+            Arg.Any<Func<string, CancellationToken, Task>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private async Task<Conversation> CreateConversationAsync(AgentType agentType = AgentType.Consultant)
     {
         var userId = Guid.NewGuid();
-        var conversation = new Conversation(userId, userId, "Chat test", AgentType.Consultant);
+        var conversation = new Conversation(userId, userId, "Chat test", agentType);
 
         DbContext.Conversations.Add(conversation);
         await DbContext.SaveChangesAsync();

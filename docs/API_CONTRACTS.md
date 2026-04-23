@@ -336,12 +336,14 @@ Response 202 Accepted:
 ### 4. Conversations (`/api/v1/conversations`)
 
 #### POST `/api/v1/conversations`
-Start a new conversation with the Architecture Consultant.
+Start a new conversation.
 ```
 Auth: User, Admin
 Request:
 {
-  "objective": "string?"    // optional: what you want to solve
+  "title": "string?",                                     // optional
+  "agentType": "Knowledge | Consultant | Radar",         // default: Knowledge
+  "activeRepositoryId": "guid?"                          // only valid for Consultant
 }
 
 Response 201:

@@ -15,7 +15,7 @@ const MOCK_REPO = {
 interface MockConversation {
   id: string
   title: string
-  agentType: 'Knowledge' | 'Consultant'
+  agentType: 'Knowledge' | 'Consultant' | 'Radar'
   mode: 'Auto' | 'RepoBound' | 'StackBound' | 'Generic'
   status: string
   lastMessageAt: string
@@ -93,7 +93,7 @@ export const conversationHandlers = [
   http.post(`${BASE_URL}/api/v1/conversations`, async ({ request }) => {
     const body = await request.json() as {
       title?: string
-      agentType?: 'Knowledge' | 'Consultant'
+      agentType?: 'Knowledge' | 'Consultant' | 'Radar'
       activeRepositoryId?: string
     }
 

@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   MessageSquare, Plus, Archive, Clock, Layers, Loader2,
-  ChevronDown, Bot, Brain, Trash2, GitBranch, ArrowLeft, Check,
+  ChevronDown, Bot, Brain, Radar, Trash2, GitBranch, ArrowLeft, Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -339,6 +339,13 @@ export function ConversationList({ activeId, onSelect, onCreateConversation, isC
                 <div>
                   <p className="font-medium">Consultant</p>
                   <p className="text-xs text-muted-foreground">Consultoría de arquitectura</p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2 text-sm" onClick={() => onCreateConversation('Radar')}>
+                <Radar className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Radar</p>
+                  <p className="text-xs text-muted-foreground">Tendencias y validación</p>
                 </div>
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -57,9 +57,10 @@ dotnet ef migrations add <Name> -p src/SentientArchitect.Data.Postgres -s src/Se
 - SearchPlugin returns personal + shared results for User role; all scopes for Admin
 
 ## Agents (Semantic Kernel)
-3 conversational agents + 1 background job:
+4 conversational agents + 1 background job:
 - **Knowledge Agent**: SearchPlugin + IngestPlugin. Handles all knowledge storage and retrieval.
 - **Consultant Agent**: ProfilePlugin + SummaryPlugin + shared SearchPlugin. Multi-turn architecture consultations.
+- **Radar Agent**: TrendsPlugin + shared SearchPlugin. Trend-first recommendations with optional validation against user knowledge rules.
 - **Guardian Agent**: RoslynPlugin + DependencyPlugin + GitMetadataPlugin. Repo static analysis.
 - **Trends Radar**: IHostedService (NOT an agent). Background job on timer.
 
