@@ -17,6 +17,7 @@ public sealed class ChatExecutionService(
     KnowledgeAgentFactory knowledgeFactory,
     ConsultantAgentFactory consultantFactory,
     RadarAgentFactory radarFactory,
+    AnthropicOrchestrator orchestrator,
     SummaryPlugin summaryPlugin,
     IApplicationDbContext db,
     IUserAccessor userAccessor,
@@ -168,25 +169,13 @@ public sealed class ChatExecutionService(
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
-        var responseHistory = new ChatHistory();
-        foreach (var item in history)
-            responseHistory.Add(item);
+        var result = await orchestrator.RunAsync(chatService, kernel, history, onToken, ct);
 
-        var responseBuilder = new System.Text.StringBuilder();
-        var settings = new PromptExecutionSettings
-        {
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-        };
-
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
-        {
-            if (string.IsNullOrEmpty(chunk.Content)) continue;
-            responseBuilder.Append(chunk.Content);
-            if (onToken is not null) await onToken(chunk.Content, ct);
-        }
+        if (!result.Succeeded)
+            return Result<ChatExecutionResponse>.Failure(result.Errors, result.ErrorType);
 
         return Result<ChatExecutionResponse>.SuccessWith(
-            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Knowledge));
+            new ChatExecutionResponse(FinalizeAssistantMessage(result.Data!), Domain.Enums.AgentType.Knowledge));
     }
 
     private async Task<Result<ChatExecutionResponse>> RunConsultantFlowAsync(
@@ -324,21 +313,13 @@ public sealed class ChatExecutionService(
         else
             responseHistory.Insert(0, contextMessage);
 
-        var responseBuilder = new System.Text.StringBuilder();
-        var settings = new PromptExecutionSettings
-        {
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-        };
+        var result = await orchestrator.RunAsync(chatService, kernel, responseHistory, onToken, ct);
 
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
-        {
-            if (string.IsNullOrEmpty(chunk.Content)) continue;
-            responseBuilder.Append(chunk.Content);
-            if (onToken is not null) await onToken(chunk.Content, ct);
-        }
+        if (!result.Succeeded)
+            return Result<ChatExecutionResponse>.Failure(result.Errors, result.ErrorType);
 
         return Result<ChatExecutionResponse>.SuccessWith(
-            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Consultant));
+            new ChatExecutionResponse(FinalizeAssistantMessage(result.Data!), Domain.Enums.AgentType.Consultant));
     }
 
     private async Task<Result<ChatExecutionResponse>> RunRadarFlowAsync(
@@ -349,25 +330,13 @@ public sealed class ChatExecutionService(
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
-        var responseHistory = new ChatHistory();
-        foreach (var item in history)
-            responseHistory.Add(item);
+        var result = await orchestrator.RunAsync(chatService, kernel, history, onToken, ct);
 
-        var responseBuilder = new System.Text.StringBuilder();
-        var settings = new PromptExecutionSettings
-        {
-            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-        };
-
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
-        {
-            if (string.IsNullOrEmpty(chunk.Content)) continue;
-            responseBuilder.Append(chunk.Content);
-            if (onToken is not null) await onToken(chunk.Content, ct);
-        }
+        if (!result.Succeeded)
+            return Result<ChatExecutionResponse>.Failure(result.Errors, result.ErrorType);
 
         return Result<ChatExecutionResponse>.SuccessWith(
-            new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Radar));
+            new ChatExecutionResponse(FinalizeAssistantMessage(result.Data!), Domain.Enums.AgentType.Radar));
     }
 
     private static string? FirstNonEmpty(params string?[] values)
