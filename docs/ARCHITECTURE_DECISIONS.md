@@ -468,3 +468,38 @@ var knowledgeAgent = new ChatCompletionAgent
 - Los datos específicos del perfil de usuario (stack, preferencias) viven en `UserProfile`, separado correctamente.
 
 **Trade-off**: Perdemos la "pureza teórica" de tener un User en Domain. En la práctica, Domain ya dependía de `Guid UserId` como proxy — la pureza era ilusoria.
+
+---
+
+## Future Scalability Improvements
+
+Documented here for reference when the system needs to scale beyond single-instance deployment.
+
+### Singleton Chat Services → Factory Pattern with Pooling
+
+**Current state**: `IChatCompletionService` is registered as a Singleton. All users share the same client instance and model.
+
+**Why it won't scale**:
+- Per-tenant model selection (different plans → different models) requires multiple service instances
+- LLM provider rate limits can't be managed per-tenant with a single client
+- A/B testing prompts or models requires runtime switching
+
+**Future approach**:
+- Replace singleton with a keyed factory (`model+tenantId` as key)
+- Use Semantic Kernel's named AI services with `IAIServiceSelector` for runtime model selection
+- Pool `IChatCompletionService` instances to avoid re-creation overhead
+- Add per-tenant `HttpClient` with rate-limiting policies via Polly
+
+### Analysis Queue Polling → Message Broker
+
+**Current state**: `RepositoryAnalysisQueueWorker` polls the database every 3 seconds (`Guardian:AnalysisQueue:PollIntervalSeconds`) for pending `AnalysisReport` records.
+
+**Why it won't scale**:
+- ~20 queries/minute with no work to do at idle — wasteful at scale
+- Can't distribute work across multiple API instances (DB claim is atomic but polling is redundant)
+- No dead-letter queue, retry semantics, or backpressure
+
+**Future approach**:
+- **Single instance**: Replace DB polling with `Channel<T>` (in-memory queue). `EnqueueRepositoryAnalysisUseCase` writes to the channel, worker reads immediately — zero polling delay
+- **Multi-instance**: Use RabbitMQ or Redis Streams as the message broker. Producer publishes to the queue, any consumer instance picks up work. Built-in retry, dead-letter, and backpressure semantics
+- The existing `IRepositoryAnalysisQueue` interface (if created) would abstract the queue implementation, making the switch transparent to the use case layer

@@ -9,7 +9,6 @@ using SentientArchitect.Domain.Entities;
 using SentientArchitect.Domain.Enums;
 using SentientArchitect.Infrastructure.Agents;
 using SentientArchitect.Infrastructure.Agents.Consultant;
-using SentientArchitect.Infrastructure.Agents.Knowledge;
 
 namespace SentientArchitect.Infrastructure.Chat;
 
@@ -18,11 +17,7 @@ public sealed class ChatExecutionService(
     KnowledgeAgentFactory knowledgeFactory,
     ConsultantAgentFactory consultantFactory,
     RadarAgentFactory radarFactory,
-    SearchPlugin searchPlugin,
-    ProfilePlugin profilePlugin,
     SummaryPlugin summaryPlugin,
-    RepositoryContextPlugin repositoryContextPlugin,
-    TrendsPlugin trendsPlugin,
     IApplicationDbContext db,
     IUserAccessor userAccessor,
     IIntentExtractor intentExtractor) : IChatExecutionService
@@ -35,29 +30,39 @@ public sealed class ChatExecutionService(
         - Ingest-IngestContent: Store new technical content in the knowledge base
 
         STRICT GUIDELINES:
-        1. When a user asks a question, ALWAYS use Search-SearchByMeaning first.
+        1. When a user asks a question, ALWAYS call Search-SearchByMeaning first.
         2. If you find relevant information, PRIORITIZE IT OVER YOUR GENERAL KNOWLEDGE.
         3. Cite the document titles you found.
         4. If nothing is found, say so clearly before offering general advice.
+        5. Structure answers as: project rule → why it matters → practical example.
+        6. Quote relevant fragments and end quotes with: '> Fuente: <document title>'.
+        7. Never mix normative project rules with generic advice in the same sentence.
+           Label generic advice explicitly.
+        8. In folder structure examples, use descriptive names (e.g. 'PdfGenerator', 'AuthService'),
+           not 'SentientArchitect'.
         """;
 
     private const string ConsultantSystemPrompt = """
         You are the Architecture Consultant for The Sentient Architect.
         Your role is to provide expert software architecture advice tailored to the developer's
         existing codebase and professional context.
-        You have access to:
-        - Profile-GetUserProfile: Get the developer's tech stack and preferences
-        - Summary-GetConversationSummary: Get context from previous conversations
-        - Search-SearchByMeaning: Search the knowledge base for relevant rules
-        - RepositoryContext-GetUserRepositoriesContext: Get the architectural patterns detected
-          in the user's actual analyzed repositories
+
+        The user's profile and conversation summary are already provided in the context below.
+        You also have these tools for gathering additional context ON DEMAND:
+        - Search-SearchByMeaning: Search the knowledge base for project-specific rules and conventions.
+          Call this when the user asks about patterns, best practices, or architecture decisions.
+        - RepositoryContext-GetUserRepositoriesContext: Get the architectural patterns and findings
+          detected in the user's actual analyzed repositories.
+          Call this when you need to verify what patterns the codebase already uses, or when
+          recommendations must align with existing conventions.
         - Trends-GetRelevantTrends: Get technology trends relevant to a given stack or keywords.
-          Use this when the user asks about modernization, trends, tool recommendations,
-          or alternatives — the radar may have real ecosystem data that improves your answer.
+          Call this when the user asks about modernization, tool recommendations, or alternatives.
 
         MANDATORY RULES — never violate these:
-        1. ALWAYS call Profile-GetUserProfile before giving any recommendation.
-        2. ALWAYS check the injected codebase context for established patterns before advising.
+        1. Before making architecture recommendations, call Search-SearchByMeaning to check for
+           project-specific rules that might override general best practices.
+        2. Before recommending patterns, call RepositoryContext-GetUserRepositoriesContext to verify
+           what patterns the codebase already uses. NEVER contradict detected conventions.
         3. Recommendations MUST be consistent with the patterns already in use in the user's
            codebase (e.g. if the codebase injects DbContext directly, do NOT recommend adding
            a repository abstraction layer).
@@ -65,25 +70,20 @@ public sealed class ChatExecutionService(
            If you mention a conflicting generic alternative, label it explicitly as
            'Alternativa generica (no aplica a este proyecto)' and explain why it does not apply.
         5. Prioritize project-specific knowledge base rules over your general training knowledge.
-          6. In RepoBound mode, do NOT recommend migration by default.
-              Only suggest migration when there is a clear non-functional mismatch
-              (e.g. extreme concurrency, latency/SLO constraints, throughput limits,
-              operational limits, or ecosystem blockers) and provide explicit evidence.
-          7. If stack and repository context conflict, ask the user to choose intent first:
-              optimize current repo, hybrid coexistence, or full migration.
-          8. Use a two-layer response: (a) short executive recommendation,
-              (b) optional detailed technical plan.
-          9. If the request provides an explicit preferred stack, that stack is binding.
-              Keep the main recommendation and code examples in that stack unless the user
-              explicitly asks for alternatives.
-          10. When the user asks about modernization opportunities, or when you are analyzing
-              an internal/trusted repository and want to suggest improvements, call
-              Trends-GetRelevantTrends with stack keywords extracted from the profile and
-              repository context. Use the results to produce a concrete
-              'Oportunidades de modernización' section with bullets in this format:
-              [Trend: {name} {direction}] — {why it applies to THIS project} → {first concrete step}.
-              In RepoBound mode, only suggest trends that are COMPATIBLE with the detected patterns.
-              NEVER suggest a trend that contradicts an established architecture convention.
+        6. In RepoBound mode, do NOT recommend migration by default.
+           Only suggest migration when there is a clear non-functional mismatch
+           (e.g. extreme concurrency, latency/SLO constraints, throughput limits,
+           operational limits, or ecosystem blockers) and provide explicit evidence.
+        7. If stack and repository context conflict, ask the user to choose intent first:
+           optimize current repo, hybrid coexistence, or full migration.
+        8. Use a two-layer response: (a) short executive recommendation,
+           (b) optional detailed technical plan.
+        9. If the request provides an explicit preferred stack, that stack is binding.
+           Keep the main recommendation and code examples in that stack unless the user
+           explicitly asks for alternatives.
+        10. When the user asks about modernization, call Trends-GetRelevantTrends and format
+            each result as: [Trend: {name} {direction}] — {why relevant} → {first concrete step}.
+            In RepoBound mode, only include trends COMPATIBLE with detected architecture patterns.
         """;
 
      private const string RadarSystemPrompt = """
@@ -144,9 +144,9 @@ public sealed class ChatExecutionService(
 
             var result = request.AgentType switch
             {
-                Domain.Enums.AgentType.Consultant => await RunDeterministicConsultantFlowAsync(request, chatService, chatHistory, onToken, ct),
-                Domain.Enums.AgentType.Radar      => await RunDeterministicRadarFlowAsync(request, chatService, chatHistory, onToken, ct),
-                _                                 => await RunDeterministicKnowledgeFlowAsync(request, chatService, chatHistory, onToken, ct),
+                Domain.Enums.AgentType.Consultant => await RunConsultantFlowAsync(request, chatService, chatHistory, kernel, onToken, ct),
+                Domain.Enums.AgentType.Radar      => await RunRadarFlowAsync(request, chatService, chatHistory, kernel, onToken, ct),
+                _                                 => await RunKnowledgeFlowAsync(request, chatService, chatHistory, kernel, onToken, ct),
             };
 
             if (result.Succeeded && result.Data is not null)
@@ -160,45 +160,25 @@ public sealed class ChatExecutionService(
         }
     }
 
-    private async Task<Result<ChatExecutionResponse>> RunDeterministicKnowledgeFlowAsync(
+    private async Task<Result<ChatExecutionResponse>> RunKnowledgeFlowAsync(
         ChatExecutionRequest request,
         IChatCompletionService chatService,
         ChatHistory history,
+        Kernel kernel,
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
-        var retrievedContext = await searchPlugin.SearchByMeaningAsync(
-            request.Message, maxResults: 8, cancellationToken: ct);
-
-        var responseKernelBuilder = Kernel.CreateBuilder();
-        responseKernelBuilder.Services.AddSingleton(chatService);
-        var responseKernel = responseKernelBuilder.Build();
-
         var responseHistory = new ChatHistory();
         foreach (var item in history)
             responseHistory.Add(item);
 
-        var contextMessage = new ChatMessageContent(
-            AuthorRole.System,
-            $"Retrieved project knowledge (source of truth):\n{retrievedContext}\n\n" +
-            "Output policy (high fidelity + clear teaching):\n" +
-            "1. Use this structure: 'Regla actual del proyecto' -> 'Por que importa' -> 'Ejemplo aplicado al proyecto' -> optional 'Alternativa generica (no normativa del proyecto)'.\n" +
-            "2. Quote at least one exact fragment from the retrieved knowledge. Quote it in Spanish — translate it if the original is in English, keeping technical identifiers unchanged (Result, Success, Failure, DELETE, HTTP 204, ToHttpResult). ALWAYS end the quote block with a line that reads exactly: '> Fuente: <document title>'.\n" +
-            "3. Never mix normative project rule and generic advice in the same sentence. Label generic advice explicitly.\n" +
-            "4. If retrieved rule states static property style, write it exactly as property access (Result.Success), not method style (Result.Success()).\n" +
-            "5. Keep examples aligned with project conventions (e.g., avoid repository pattern if project rule says no repository pattern).\n" +
-            "6. In folder structure examples, do NOT use 'SentientArchitect' as the root folder name. Infer a short descriptive name from the user's request (e.g. 'PdfGenerator', 'AuthService', 'NotificationWorker'). If unsure, use 'MyApp'.\n" +
-            "7. Keep response concise, explicit, and auditable.");
-
-        if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
-            responseHistory.Insert(1, contextMessage);
-        else
-            responseHistory.Insert(0, contextMessage);
-
         var responseBuilder = new System.Text.StringBuilder();
-        var noToolSettings  = new PromptExecutionSettings();
+        var settings = new PromptExecutionSettings
+        {
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        };
 
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
+        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
         {
             if (string.IsNullOrEmpty(chunk.Content)) continue;
             responseBuilder.Append(chunk.Content);
@@ -209,16 +189,16 @@ public sealed class ChatExecutionService(
             new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Knowledge));
     }
 
-    private async Task<Result<ChatExecutionResponse>> RunDeterministicConsultantFlowAsync(
+    private async Task<Result<ChatExecutionResponse>> RunConsultantFlowAsync(
         ChatExecutionRequest request,
         IChatCompletionService chatService,
         ChatHistory history,
+        Kernel kernel,
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
         var userId = userAccessor.GetCurrentUserId();
 
-        // Load with tracking so we can persist detected intent
         var conversation = await db.Conversations
             .FirstOrDefaultAsync(c => c.Id == request.ConversationId && c.UserId == userId, ct);
 
@@ -227,8 +207,6 @@ public sealed class ChatExecutionService(
         var resolvedRepositoryId = request.ActiveRepositoryId ?? conversation?.ActiveRepositoryId;
         var explicitStackInRequest = !string.IsNullOrWhiteSpace(request.PreferredStack);
 
-        // In Auto mode, use the LLM to extract intent from the message — no hardcoded keywords.
-        // Persist detected stack/scope so follow-up messages don't need to ask again.
         if (resolvedMode == ConsultantContextMode.Auto && conversation is not null)
         {
             var hasEnoughContext = !string.IsNullOrWhiteSpace(resolvedStack) ||
@@ -236,7 +214,6 @@ public sealed class ChatExecutionService(
                                    !string.IsNullOrWhiteSpace(conversation.DetectedStack) ||
                                    !string.IsNullOrWhiteSpace(conversation.DetectedScope);
 
-            // Only extract intent if we don't already have it persisted from a previous message
             if (!hasEnoughContext || string.IsNullOrWhiteSpace(conversation.DetectedScope))
             {
                 var intent = await intentExtractor.ExtractAsync(request.Message, ct);
@@ -247,11 +224,9 @@ public sealed class ChatExecutionService(
                     await db.SaveChangesAsync(ct);
                 }
 
-                // Merge detected stack into resolved stack if not already set
                 if (string.IsNullOrWhiteSpace(resolvedStack) && !string.IsNullOrWhiteSpace(intent.Stack))
                     resolvedStack = intent.Stack;
 
-                // Ask clarification only if LLM says we genuinely need it
                 if (intent.NeedsScope || (intent.NeedsStack && string.IsNullOrWhiteSpace(resolvedStack)))
                 {
                     var clarification = BuildClarificationPrompt(intent.NeedsScope, intent.NeedsStack, resolvedRepositoryId);
@@ -261,44 +236,34 @@ public sealed class ChatExecutionService(
             }
             else if (!string.IsNullOrWhiteSpace(conversation.DetectedStack) && string.IsNullOrWhiteSpace(resolvedStack))
             {
-                // Reuse previously detected stack from an earlier message
                 resolvedStack = conversation.DetectedStack;
             }
         }
 
-        // Plugins share the same scoped DbContext; keep this flow sequential to avoid
-        // "A second operation was started on this context instance" concurrency errors.
-        var userProfile = await profilePlugin.GetUserProfileAsync(ct);
-        var conversationSummary = await summaryPlugin.GetConversationSummaryAsync(
-            request.ConversationId.ToString(),
-            ct);
-        var retrievedContext = await searchPlugin.SearchByMeaningAsync(
-            request.Message,
-            maxResults: 8,
-            cancellationToken: ct);
-        var repositoryContext = await repositoryContextPlugin.GetUserRepositoriesContextAsync(
-            userId.ToString(),
-            resolvedRepositoryId?.ToString(),
-            ct);
+        // Pre-fetch profile + summary in parallel using independent scopes
+        using var profileScope = services.CreateScope();
+        using var summaryScope = services.CreateScope();
 
-        var repositoryPriorityHeader = resolvedMode == ConsultantContextMode.RepoBound
-            ? "## Existing codebase patterns (HIGHEST priority — never contradict these)\n"
-            : "## Existing codebase patterns (background context — do not override explicit preferred stack)\n";
+        var scopedProfile = profileScope.ServiceProvider.GetRequiredService<ProfilePlugin>();
+        var scopedSummary = summaryScope.ServiceProvider.GetRequiredService<SummaryPlugin>();
+
+        var profileTask = scopedProfile.GetUserProfileAsync(ct);
+        var summaryTask = scopedSummary.GetConversationSummaryAsync(
+            request.ConversationId.ToString(), ct);
+
+        await Task.WhenAll(profileTask, summaryTask);
+
+        var userProfile = await profileTask;
+        var conversationSummary = await summaryTask;
 
         var repositoryPriorityPolicy = resolvedMode == ConsultantContextMode.RepoBound
-            ? "2. CRITICAL: The 'Existing codebase patterns' section above is ground truth. Any recommendation you make MUST be consistent with those patterns.\n"
-            : "2. In StackBound/Generic modes, treat 'Existing codebase patterns' as background context only. Do NOT let it override explicit preferred stack.\n";
-
-        var responseKernelBuilder = Kernel.CreateBuilder();
-        responseKernelBuilder.Services.AddSingleton(chatService);
-        var responseKernel = responseKernelBuilder.Build();
+            ? "2. CRITICAL: When you retrieve repository context, treat detected patterns as ground truth. Any recommendation MUST be consistent with those patterns.\n"
+            : "2. In StackBound/Generic modes, treat repository context as background only. Do NOT let it override explicit preferred stack.\n";
 
         var responseHistory = new ChatHistory();
         foreach (var item in history)
             responseHistory.Add(item);
 
-        // Prevent cross-stack contamination from earlier assistant turns when the user
-        // explicitly pins a stack for this request.
         if (explicitStackInRequest &&
             (resolvedMode == ConsultantContextMode.Generic || resolvedMode == ConsultantContextMode.StackBound))
         {
@@ -317,15 +282,13 @@ public sealed class ChatExecutionService(
 
         var contextMessage = new ChatMessageContent(
             AuthorRole.System,
-            "Consultant context (source of truth — you MUST follow every constraint below):\n\n" +
+            "Consultant context:\n\n" +
             $"## Effective stack lock\n{resolvedStack ?? "Not specified"}\n\n" +
             $"## User profile\n{userProfile}\n\n" +
             $"## Context mode\n{resolvedMode}\n\n" +
             $"## Preferred stack\n{resolvedStack ?? "Not specified"}\n\n" +
             $"## Active repository id\n{resolvedRepositoryId?.ToString() ?? "Not specified"}\n\n" +
             $"## Conversation summary\n{conversationSummary}\n\n" +
-            $"## Knowledge base rules\n{retrievedContext}\n\n" +
-            $"{repositoryPriorityHeader}{repositoryContext}\n\n" +
             "## Response policy\n" +
             "1. Tailor every recommendation to the user profile and team context.\n" +
             repositoryPriorityPolicy +
@@ -337,32 +300,24 @@ public sealed class ChatExecutionService(
             "5. Prioritize knowledge base rules over your general training knowledge.\n" +
             "6. If context mode is StackBound or Generic, avoid imposing repository-specific conventions from a different stack.\n" +
             "7. In RepoBound mode, do NOT push migration unless the user explicitly asks for it, " +
-            "or unless there is a clear non-functional mismatch (concurrency/SLO/throughput/ops constraints) backed by evidence.\n" +
-            "8. If migration is suggested due to constraints, first state why the current stack may not satisfy the target constraints, " +
+            "or unless there is a clear non-functional mismatch backed by evidence.\n" +
+            "8. If migration is suggested, first state why the current stack may not satisfy constraints, " +
             "then offer at least one in-stack mitigation path before migration.\n" +
             "9. If stack preference and repository conventions conflict, ask intent first: optimize current repo, hybrid coexistence, or full migration.\n" +
-            "10. If 'Preferred stack' is provided, keep primary architecture and code examples in that stack. " +
-            "Only mention other stacks as explicit alternatives with trade-offs.\n" +
+            "10. If 'Preferred stack' is provided, keep primary architecture and code examples in that stack.\n" +
             "11. If 'Preferred stack' is provided, do NOT infer or switch the main stack from user profile defaults or knowledge-base snippets.\n" +
-            "12. If knowledge-base/project rules are from a different stack than 'Preferred stack', label them as context only and keep implementation in preferred stack.\n" +
-            "13. If prior conversation messages suggest a different stack, treat them as outdated context and align to current 'Preferred stack'.\n" +
-            "14. Unless the user explicitly asks for full implementation code, avoid very long code blocks and prioritize concise architecture guidance.\n" +
-            "15. Never end with incomplete code blocks or dangling fragments. If a code fence is opened, close it.\n" +
-            "16. If 'Preferred stack' contains Java/Spring, do not output C#/.NET code as the primary proposal.\n" +
-            "17. Output budget: keep the full answer under 250 words by default. Use short bullets, avoid large diagrams.\n" +
-            "18. Format response in two layers: short executive summary first (2-3 sentences max), then optional bullet-point detail.\n" +
-            "19. Keep practical next steps explicit and actionable.\n" +
-            "20. When the user asks for an opinion on a repo, DO NOT ask for more context — you already have the analysis findings. " +
-            "Give a direct opinion based on what you see: executive summary of severity, top 3 issues to fix first, and one positive observation.\n" +
-            "21. When context mode is RepoBound and the repository has an ABOUT.md intent, use it to frame recommendations in terms of the author's stated vision.\n" +
-            "22. When producing modernization suggestions, format each trend bullet as: " +
-            "'[Trend: {name} {↑/→}] — {why relevant to THIS project} → {first concrete adoption step}'. " +
-            "Only include trends that are compatible with the detected architecture patterns.\n" +
-            "23. If any knowledge base rule has a [Source: <url>] field, include those URLs ONLY at the very end of your response " +
-            "under a '**Fuentes**' section as a markdown list using this exact format: '- [Title](url)'. " +
-            "Use the rule title as the link text. Do NOT inline URLs in the body of your response. " +
-            "Do NOT write bare URLs — always use markdown link syntax [text](url). " +
-            "Only include sources from this response — do not repeat sources from previous messages in the conversation.");
+            "12. Unless the user explicitly asks for full implementation code, avoid very long code blocks.\n" +
+            "13. Never end with incomplete code blocks or dangling fragments. If a code fence is opened, close it.\n" +
+            "14. Output budget: keep the full answer under 250 words by default. Use short bullets.\n" +
+            "15. Format response in two layers: short executive summary first, then optional bullet-point detail.\n" +
+            "16. Keep practical next steps explicit and actionable.\n" +
+            "17. When the user asks for an opinion on a repo, call RepositoryContext-GetUserRepositoriesContext and give a direct opinion: " +
+            "executive summary of severity, top 3 issues to fix first, and one positive observation.\n" +
+            "18. When context mode is RepoBound and the repository has an ABOUT.md intent, use it to frame recommendations.\n" +
+            "19. When producing modernization suggestions, format each trend bullet as: " +
+            "'[Trend: {name} {↑/→}] — {why relevant to THIS project} → {first concrete adoption step}'.\n" +
+            "20. If any knowledge base rule has a [Source: <url>] field, include those URLs ONLY at the very end " +
+            "under a '**Fuentes**' section as markdown links: '- [Title](url)'. Do NOT inline URLs in the body.");
 
         if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
             responseHistory.Insert(1, contextMessage);
@@ -370,9 +325,12 @@ public sealed class ChatExecutionService(
             responseHistory.Insert(0, contextMessage);
 
         var responseBuilder = new System.Text.StringBuilder();
-        var noToolSettings  = new PromptExecutionSettings();
+        var settings = new PromptExecutionSettings
+        {
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        };
 
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
+        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
         {
             if (string.IsNullOrEmpty(chunk.Content)) continue;
             responseBuilder.Append(chunk.Content);
@@ -383,56 +341,25 @@ public sealed class ChatExecutionService(
             new ChatExecutionResponse(FinalizeAssistantMessage(responseBuilder.ToString()), Domain.Enums.AgentType.Consultant));
     }
 
-    private async Task<Result<ChatExecutionResponse>> RunDeterministicRadarFlowAsync(
+    private async Task<Result<ChatExecutionResponse>> RunRadarFlowAsync(
         ChatExecutionRequest request,
         IChatCompletionService chatService,
         ChatHistory history,
+        Kernel kernel,
         Func<string, CancellationToken, Task>? onToken,
         CancellationToken ct)
     {
-        // Extract keywords from the message — strip punctuation so "Testing?" matches "E2E Testing".
-        var stackKeywords = request.Message
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => new string(w.Where(c => char.IsLetterOrDigit(c)).ToArray()))
-            .Where(w => w.Length > 2)
-            .Select(w => w.ToLowerInvariant())
-            .ToArray();
-
-        // 1. Call TrendsPlugin deterministically — this is the primary data source.
-        var trendsContext = await trendsPlugin.GetRelevantTrendsAsync(stackKeywords, maxResults: 10, cancellationToken: ct);
-
-        // 2. Call SearchPlugin as secondary validation source (check conflicts with brain rules).
-        var brainContext = await searchPlugin.SearchByMeaningAsync(request.Message, maxResults: 5, cancellationToken: ct);
-
-        var responseKernelBuilder = Kernel.CreateBuilder();
-        responseKernelBuilder.Services.AddSingleton(chatService);
-        var responseKernel = responseKernelBuilder.Build();
-
         var responseHistory = new ChatHistory();
         foreach (var item in history)
             responseHistory.Add(item);
 
-        var contextMessage = new ChatMessageContent(
-            AuthorRole.System,
-            "Radar context — you MUST use the data below as your only factual sources:\n\n" +
-            $"## [Radar] Ecosystem trend data (PRIMARY source)\n{trendsContext}\n\n" +
-            $"## [Brain] User knowledge base (VALIDATION only — check for conflicts with trends above)\n{brainContext}\n\n" +
-            "Attribution rules (MANDATORY — never violate):\n" +
-            "1. Prefix every factual statement with [Radar] if it comes from the trend data above, or [Brain] if it comes from the knowledge base above.\n" +
-            "2. NEVER label a Brain result as [Radar]. NEVER label a Radar result as [Brain].\n" +
-            "3. If a trend above conflicts with a Brain rule, add a '## Conflicto detectado' section with: the trend, the conflicting rule, and your recommendation.\n" +
-            "4. If the Radar data above is empty or says 'No hay trends', state exactly: 'El radar no tiene data suficiente sobre este tema. Considera correr un scan manual.' Do NOT compensate with Brain data or general knowledge.\n" +
-            "5. Use this structure: ## Resumen / ## Trends detectados / ## Validacion contra tu proyecto (optional) / ## Conflicto detectado (optional) / ## Fuentes (only if Brain sources have URLs).");
-
-        if (responseHistory.Count > 0 && responseHistory[0].Role == AuthorRole.System)
-            responseHistory.Insert(1, contextMessage);
-        else
-            responseHistory.Insert(0, contextMessage);
-
         var responseBuilder = new System.Text.StringBuilder();
-        var noToolSettings  = new PromptExecutionSettings();
+        var settings = new PromptExecutionSettings
+        {
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        };
 
-        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, noToolSettings, responseKernel, ct))
+        await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(responseHistory, settings, kernel, ct))
         {
             if (string.IsNullOrEmpty(chunk.Content)) continue;
             responseBuilder.Append(chunk.Content);

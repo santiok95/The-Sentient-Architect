@@ -25,6 +25,7 @@ using SentientArchitect.Infrastructure.Agents.Knowledge;
 using SentientArchitect.Infrastructure.BackgroundJobs;
 using SentientArchitect.Infrastructure.Chat;
 using SentientArchitect.Infrastructure.Guardian;
+using Microsoft.Extensions.Caching.Memory;
 using SentientArchitect.Infrastructure.Identity;
 
 namespace SentientArchitect.Infrastructure;
@@ -88,6 +89,9 @@ public static class InfrastructureServiceExtensions
                 };
             });
 
+        // ── Caching ──────────────────────────────────────────────────────────
+        services.AddMemoryCache(options => options.SizeLimit = 1024);
+
         // ── HTTP Context ─────────────────────────────────────────────────────
         services.AddHttpContextAccessor();
 
@@ -142,7 +146,11 @@ public static class InfrastructureServiceExtensions
 #pragma warning disable SKEXP0001
             services.AddSingleton<ITextEmbeddingGenerationService>(embeddingGenerator);
 #pragma warning restore SKEXP0001
-            services.AddScoped<IEmbeddingService, OpenAIEmbeddingService>();
+            services.AddScoped<OpenAIEmbeddingService>();
+            services.AddScoped<IEmbeddingService>(sp =>
+                new CachedEmbeddingService(
+                    sp.GetRequiredService<OpenAIEmbeddingService>(),
+                    sp.GetRequiredService<IMemoryCache>()));
         }
         else
         {

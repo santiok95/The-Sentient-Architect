@@ -9,4 +9,10 @@ public sealed class ConversationOptions
     /// Default: 20.
     /// </summary>
     public int CompactionThreshold { get; init; } = 20;
+
+    /// <summary>
+    /// Estimated token count since last compaction that triggers summary generation.
+    /// Takes priority over <see cref="CompactionThreshold"/> when token data is available.
+    /// </summary>
+    public long CompactionTokenThreshold { get; init; } = 8000;
 }

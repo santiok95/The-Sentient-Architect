@@ -59,12 +59,14 @@ public class ExecuteChatUseCase(
                 saveUserMessageResult.ErrorType,
                 ct);
 
-        // Count only messages since the last compaction to avoid perpetual re-compaction
-        var messagesForThreshold = conversation.LastCompactedAt.HasValue
-            ? conversation.Messages.Count(m => m.CreatedAt > conversation.LastCompactedAt.Value)
-            : conversation.Messages.Count;
+        var recentMessages = conversation.LastCompactedAt.HasValue
+            ? conversation.Messages.Where(m => m.CreatedAt > conversation.LastCompactedAt.Value)
+            : conversation.Messages;
 
-        var shouldCompact = messagesForThreshold >= options.Value.CompactionThreshold;
+        var estimatedTokens = recentMessages.Sum(m => m.TokensUsed);
+        var shouldCompact = estimatedTokens > 0
+            ? estimatedTokens >= options.Value.CompactionTokenThreshold
+            : recentMessages.Count() >= options.Value.CompactionThreshold;
 
         var streamedAnyToken = false;
         var executionResult = await chatExecutionService.ExecuteAsync(
