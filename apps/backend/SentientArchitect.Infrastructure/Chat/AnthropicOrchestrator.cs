@@ -23,6 +23,8 @@ public sealed class AnthropicOrchestrator
         ["GetUserProfile"] = "Profile",
         ["GetConversationSummary"] = "Summary",
         ["SaveConversationSummary"] = "Summary",
+        ["GetUserRepositoriesContext"] = "RepositoryContext",
+        ["GetRelevantTrends"] = "Trends",
     };
 
     public async Task<Result<string>> RunAsync(
@@ -40,7 +42,7 @@ public sealed class AnthropicOrchestrator
                 FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
             };
 
-            while (true)
+            for (var iteration = 0; iteration < 8; iteration++)
             {
                 var textBuilder = new System.Text.StringBuilder();
                 var functionCallBuilder = new FunctionCallContentBuilder();
@@ -48,13 +50,7 @@ public sealed class AnthropicOrchestrator
                 await foreach (var chunk in chatService.GetStreamingChatMessageContentsAsync(history, settings, kernel, ct))
                 {
                     if (!string.IsNullOrEmpty(chunk.Content))
-                    {
                         textBuilder.Append(chunk.Content);
-                        fullResponse.Append(chunk.Content);
-
-                        if (onToken is not null)
-                            await onToken(chunk.Content, ct);
-                    }
 
                     functionCallBuilder.Append(chunk);
                 }
@@ -100,7 +96,15 @@ public sealed class AnthropicOrchestrator
                 history.Add(assistantMessage);
 
                 if (functionCalls.Count == 0)
+                {
+                    var responseText = textBuilder.ToString();
+                    fullResponse.Append(responseText);
+
+                    if (onToken is not null && !string.IsNullOrEmpty(responseText))
+                        await onToken(responseText, ct);
+
                     break;
+                }
 
                 var toolResults = new ChatMessageContentItemCollection();
                 foreach (var functionCall in functionCalls)
@@ -118,6 +122,9 @@ public sealed class AnthropicOrchestrator
 
                 history.Add(new ChatMessageContent(AuthorRole.Tool, toolResults));
             }
+
+            if (fullResponse.Length == 0)
+                return Result<string>.Failure(["The assistant did not produce a final response."], ErrorType.Failure);
 
             return Result<string>.SuccessWith(fullResponse.ToString());
         }
@@ -178,11 +185,13 @@ public sealed class AnthropicOrchestrator
         var calls = new List<FunctionCallContent>();
         foreach (Match invokeMatch in InvokeBlockRegex.Matches(content))
         {
-            var functionName = invokeMatch.Groups[1].Value?.Trim();
-            if (string.IsNullOrWhiteSpace(functionName))
+            var rawFunctionName = invokeMatch.Groups[1].Value?.Trim();
+            if (string.IsNullOrWhiteSpace(rawFunctionName))
                 continue;
 
-            if (functionName.StartsWith("toolu_", StringComparison.OrdinalIgnoreCase))
+            var resolved = ResolveFunctionNameAndPlugin(rawFunctionName, null, calls.Count, []);
+            if (string.IsNullOrWhiteSpace(resolved.Name) ||
+                resolved.Name.StartsWith("toolu_", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var args = new KernelArguments();
@@ -197,11 +206,10 @@ public sealed class AnthropicOrchestrator
                 args[paramName] = paramValue;
             }
 
-            ToolToPlugin.TryGetValue(functionName, out var pluginName);
             calls.Add(new FunctionCallContent(
                 id: Guid.NewGuid().ToString("N"),
-                pluginName: pluginName,
-                functionName: functionName,
+                pluginName: resolved.Plugin,
+                functionName: resolved.Name,
                 arguments: args));
         }
 
